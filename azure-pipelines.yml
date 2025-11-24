@@ -1,0 +1,64 @@
+trigger:
+  branches:
+    include:
+      - develop  # Replace with your default branch name
+
+pool:
+  vmImage: 'windows-latest'  # Use an appropriate VM image (Linux or Windows)
+
+variables:
+  NEXTJS_VERSION: '22.x'  # Specify the desired Node.js version
+  # PACKAGE_MANAGER: 'pnpm@9.3.0'  # Specify the pnpm version you want to use
+  artifactName: 'source-code'
+  zipFileName: 'source-code.zip'
+  NEXT_PUBLIC_API_URL: 'https://newggs-develop-b2dqb7e0e8e4fmfr.eastus-01.azurewebsites.net/'
+
+steps:
+
+# - task: NodeTool@0
+#   inputs:
+#     versionSpec: "22.x" 
+#   displayName: "Install Node.js"    
+
+# - script: |
+#     npm install -g pnpm@9.3.0  
+#     pnpm --version  
+#   displayName: 'Install pnpm globally and verify'
+
+- script: |
+    echo "NEXT_PUBLIC_API_URL=$(NEXT_PUBLIC_API_URL)" >> .env
+  displayName: 'Write environment variables to .env file'
+
+- script: |
+    npm install --force
+  displayName: 'Install dependencies using pnpm'
+
+- script: |
+    npm run build 
+  displayName: 'Build Next.js application using pnpm'
+
+# - script: |
+    # pnpm run export  # Export Next.js static application
+  # displayName: 'Export Next.js application using pnpm'
+
+# - script: |
+#     zip -r $(zipFileName) . -x '*.git*'
+#   displayName: 'Zip source code'
+
+# - task: PublishBuildArtifacts@1  # Publish the build artifacts
+#   inputs:
+#     PathtoPublish: '$(zipFileName)'
+#     ArtifactName: '$(artifactName)'
+#     publishLocation: 'Container'
+
+- task: ArchiveFiles@2
+  inputs:
+    rootFolderOrFile: '.'  # or `.next` or `build`, depending on your app
+    includeRootFolder: false
+    archiveFile: '$(Build.ArtifactStagingDirectory)/app.zip'
+    replaceExistingArchive: true
+
+- task: PublishBuildArtifacts@1
+  inputs:
+    PathtoPublish: '$(Build.ArtifactStagingDirectory)/app.zip'
+    ArtifactName: 'drop'
