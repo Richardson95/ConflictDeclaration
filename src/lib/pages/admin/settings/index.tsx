@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Box,
   VStack,
@@ -10,468 +10,412 @@ import {
   Textarea,
   Select as ChakraSelect,
   createListCollection,
-  Image,
+  Button as ChakraButton,
 } from '@chakra-ui/react';
 import { Button } from '@/components/ui';
 import AdminLayout from '@/lib/layout/AdminLayout';
+import { FiChevronLeft, FiChevronRight } from 'react-icons/fi';
+import { toaster } from '@/components/ui/toaster';
 
-// Mock data for employees in settings
-const baseEmployees = [
-  { firstName: 'Segun', lastName: 'Arinze', email: 's.arinze@gmail.com', department: 'Finance', role: 'Lead Transactor', isActive: true },
-  { firstName: 'Segun', lastName: 'Arinze', email: 's.arinze@gmail.com', department: 'Compliance', role: 'Lead Transactor', isActive: true },
-  { firstName: 'Segun', lastName: 'Arinze', email: 's.arinze@gmail.com', department: 'Origination & Structuring', role: 'Lead Transactor', isActive: false },
-  { firstName: 'Segun', lastName: 'Arinze', email: 's.arinze@gmail.com', department: 'Compliance', role: 'Lead Transactor', isActive: true },
-];
+// Import all API hooks
+import {
+  useGetUsersQuery,
+  useCreateUserMutation,
+  useUpdateUserMutation,
+  useDeleteUserMutation,
+  useActivateUserMutation,
+  useDeactivateUserMutation,
+} from '@/lib/redux/services/employee.service';
 
-const mockEmployees = Array.from({ length: 512 }, (_, i) => ({
-  _id: (i + 1).toString(),
-  firstName: baseEmployees[i % baseEmployees.length].firstName,
-  lastName: baseEmployees[i % baseEmployees.length].lastName,
-  email: baseEmployees[i % baseEmployees.length].email,
-  department: baseEmployees[i % baseEmployees.length].department,
-  role: baseEmployees[i % baseEmployees.length].role,
-  isActive: baseEmployees[i % baseEmployees.length].isActive,
-}));
+import {
+  useGetDepartmentsQuery,
+  useCreateDepartmentMutation,
+  useUpdateDepartmentMutation,
+  useDeleteDepartmentMutation,
+} from '@/lib/redux/services/department.service';
 
-// Mock data for roles
-const baseRoles = [
-  { name: 'Compliance', description: 'Compliance' },
-  { name: 'Operations', description: 'Operations' },
-  { name: 'IT Admin', description: 'IT Admin' },
-  { name: 'Employee', description: 'Employee' },
-];
+import {
+  useCreateCounterpartyMutation,
+  useUpdateCounterpartyMutation,
+  useDeleteCounterpartyMutation,
+} from '@/lib/redux/services/counterparty.service';
 
-const mockRoles = Array.from({ length: 512 }, (_, i) => ({
-  _id: (i + 1).toString(),
-  name: baseRoles[i % baseRoles.length].name,
-  description: baseRoles[i % baseRoles.length].description,
-}));
+import {
+  useGetCounterpartyConflictSummaryQuery,
+} from '@/lib/redux/services/dashboard.service';
 
-// Mock data for departments
-const baseDepartments = [
-  { name: 'Credit Risk', description: 'Admin User' },
-  { name: 'ESG & DI', description: 'ESG & DI' },
-  { name: 'Information Technology & Digital Service', description: 'Information Technology & Digital Service' },
-];
+import {
+  useGetSectorsQuery,
+  useGetActiveSectorsQuery,
+  useCreateSectorMutation,
+  useUpdateSectorMutation,
+  useDeleteSectorMutation,
+} from '@/lib/redux/services/sector.service';
 
-const mockDepartments = Array.from({ length: 512 }, (_, i) => ({
-  _id: (i + 1).toString(),
-  name: baseDepartments[i % baseDepartments.length].name,
-  description: baseDepartments[i % baseDepartments.length].description,
-}));
-
-// Mock data for counterparties
-const baseCounterparties = [
-  { name: 'Access Bank', description: 'Access Bank', sector: 'Banking' },
-  { name: 'Deloitte', description: 'Deloitte', sector: 'Technology' },
-  { name: 'KPMG', description: 'KPMG', sector: 'Professional Services' },
-];
-
-const mockCounterparties = Array.from({ length: 512 }, (_, i) => ({
-  _id: (i + 1).toString(),
-  name: baseCounterparties[i % baseCounterparties.length].name,
-  description: baseCounterparties[i % baseCounterparties.length].description,
-  sector: baseCounterparties[i % baseCounterparties.length].sector,
-}));
-
-// Mock data for sectors
-const baseSectors = [
-  { name: 'Banking', description: 'Banking' },
-  { name: 'Technology', description: 'Technology' },
-  { name: 'Professional Services', description: 'Professional Services' },
-];
-
-const mockSectors = Array.from({ length: 512 }, (_, i) => ({
-  _id: (i + 1).toString(),
-  name: baseSectors[i % baseSectors.length].name,
-  description: baseSectors[i % baseSectors.length].description,
-}));
-
-// Mock data for activity log
-const baseActivityLogs = [
-  { fullName: 'Segun Arinze', email: 's.arinze@gmail.com', dateTime: '24th June, 2025', action: 'Declared Conflict' },
-  { fullName: 'Chamara Eze', email: 'c.eze@gmail.com', dateTime: '24th June, 2025', action: 'Checked for conflict declaration on Access Bank' },
-];
-
-const mockActivityLogs = Array.from({ length: 512 }, (_, i) => ({
-  _id: (i + 1).toString(),
-  fullName: baseActivityLogs[i % baseActivityLogs.length].fullName,
-  email: baseActivityLogs[i % baseActivityLogs.length].email,
-  dateTime: baseActivityLogs[i % baseActivityLogs.length].dateTime,
-  action: baseActivityLogs[i % baseActivityLogs.length].action,
-}));
+import {
+  useGetUserActivitiesQuery,
+  useGetAuditLogsQuery,
+} from '@/lib/redux/services/admin.service';
 
 const SettingsPage = () => {
   const [activeTab, setActiveTab] = useState('Employees');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Employee/User state
   const [selectedDepartment, setSelectedDepartment] = useState('');
   const [selectedRole, setSelectedRole] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('');
-  const [employees, setEmployees] = useState(mockEmployees);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [employeeToDelete, setEmployeeToDelete] = useState<string | null>(null);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [newEmployee, setNewEmployee] = useState({
+  const [userToDelete, setUserToDelete] = useState<string | null>(null);
+  const [showAddUserModal, setShowAddUserModal] = useState(false);
+  const [showEditUserModal, setShowEditUserModal] = useState(false);
+  const [userToEdit, setUserToEdit] = useState<any>(null);
+  const [newUser, setNewUser] = useState({
     firstName: '',
     lastName: '',
     email: '',
-    department: '',
-    role: '',
+    departmentId: '',
+    role: 1,
   });
 
-  // Roles state
-  const [roles, setRoles] = useState(mockRoles);
-  const [rolesCurrentPage, setRolesCurrentPage] = useState(1);
-  const [rolesItemsPerPage, setRolesItemsPerPage] = useState(10);
-  const [rolesSearchQuery, setRolesSearchQuery] = useState('');
-  const [showDeleteRoleModal, setShowDeleteRoleModal] = useState(false);
-  const [roleToDelete, setRoleToDelete] = useState<string | null>(null);
-  const [showAddRoleModal, setShowAddRoleModal] = useState(false);
-  const [showEditRoleModal, setShowEditRoleModal] = useState(false);
-  const [roleToEdit, setRoleToEdit] = useState<string | null>(null);
-  const [newRole, setNewRole] = useState({
-    name: '',
-    description: '',
-  });
-  const [editRole, setEditRole] = useState({
-    name: '',
-    description: '',
-  });
-
-  // Departments state
-  const [departments, setDepartments] = useState(mockDepartments);
-  const [departmentsCurrentPage, setDepartmentsCurrentPage] = useState(1);
-  const [departmentsItemsPerPage, setDepartmentsItemsPerPage] = useState(10);
-  const [departmentsSearchQuery, setDepartmentsSearchQuery] = useState('');
+  // Department state
   const [showDeleteDepartmentModal, setShowDeleteDepartmentModal] = useState(false);
   const [departmentToDelete, setDepartmentToDelete] = useState<string | null>(null);
   const [showAddDepartmentModal, setShowAddDepartmentModal] = useState(false);
   const [showEditDepartmentModal, setShowEditDepartmentModal] = useState(false);
-  const [departmentToEdit, setDepartmentToEdit] = useState<string | null>(null);
+  const [departmentToEdit, setDepartmentToEdit] = useState<any>(null);
   const [newDepartment, setNewDepartment] = useState({
     name: '',
     description: '',
-  });
-  const [editDepartment, setEditDepartment] = useState({
-    name: '',
-    description: '',
+    code: '',
   });
 
-  // Counterparties state
-  const [counterparties, setCounterparties] = useState(mockCounterparties);
-  const [counterpartiesCurrentPage, setCounterpartiesCurrentPage] = useState(1);
-  const [counterpartiesItemsPerPage, setCounterpartiesItemsPerPage] = useState(10);
-  const [counterpartiesSearchQuery, setCounterpartiesSearchQuery] = useState('');
+  // Counterparty state
+  const [selectedSector, setSelectedSector] = useState('');
   const [showDeleteCounterpartyModal, setShowDeleteCounterpartyModal] = useState(false);
   const [counterpartyToDelete, setCounterpartyToDelete] = useState<string | null>(null);
   const [showAddCounterpartyModal, setShowAddCounterpartyModal] = useState(false);
   const [showEditCounterpartyModal, setShowEditCounterpartyModal] = useState(false);
-  const [counterpartyToEdit, setCounterpartyToEdit] = useState<string | null>(null);
+  const [counterpartyToEdit, setCounterpartyToEdit] = useState<any>(null);
   const [newCounterparty, setNewCounterparty] = useState({
     name: '',
-    description: '',
-    sector: '',
-  });
-  const [editCounterparty, setEditCounterparty] = useState({
-    name: '',
-    description: '',
-    sector: '',
+    sectorId: '',
   });
 
-  // Sectors state
-  const [sectors, setSectors] = useState(mockSectors);
-  const [sectorsCurrentPage, setSectorsCurrentPage] = useState(1);
-  const [sectorsItemsPerPage, setSectorsItemsPerPage] = useState(10);
-  const [sectorsSearchQuery, setSectorsSearchQuery] = useState('');
+  // Sector state
   const [showDeleteSectorModal, setShowDeleteSectorModal] = useState(false);
   const [sectorToDelete, setSectorToDelete] = useState<string | null>(null);
   const [showAddSectorModal, setShowAddSectorModal] = useState(false);
   const [showEditSectorModal, setShowEditSectorModal] = useState(false);
-  const [sectorToEdit, setSectorToEdit] = useState<string | null>(null);
+  const [sectorToEdit, setSectorToEdit] = useState<any>(null);
   const [newSector, setNewSector] = useState({
     name: '',
     description: '',
-  });
-  const [editSector, setEditSector] = useState({
-    name: '',
-    description: '',
+    isActive: true,
   });
 
-  // Activity Log state
-  const [activityLogs] = useState(mockActivityLogs);
-  const [activityLogsCurrentPage, setActivityLogsCurrentPage] = useState(1);
-  const [activityLogsItemsPerPage, setActivityLogsItemsPerPage] = useState(10);
-  const [activityLogsSearchQuery] = useState('');
-
-  const tabs = ['Employees', 'Roles', 'Departments', 'Counterparties', 'Sectors', 'Activity log'];
-
-  // Filter options
-  const departmentOptions = [
-    ...Array.from(new Set(employees.map((item) => item.department))).map(
-      (dept) => ({
-        label: dept,
-        value: dept,
-      })
-    ),
-  ];
-
-  const roleOptions = [
-    { label: 'Lead Transactor', value: 'Lead Transactor' },
-  ];
-
-  const statusOptions = [
-    { label: 'Active', value: 'active' },
-    { label: 'Inactive', value: 'inactive' },
-  ];
-
-  const departmentCollection = createListCollection({
-    items: departmentOptions,
-    itemToString: (item) => item.label,
-    itemToValue: (item) => item.value,
+  // API Queries - Fetch ALL users for client-side filtering
+  const { data: usersData, isLoading: isLoadingUsers, refetch: refetchUsers } = useGetUsersQuery({
+    page: 1,
+    limit: 10000, // Fetch all users
   });
 
-  const roleCollection = createListCollection({
-    items: roleOptions,
-    itemToString: (item) => item.label,
-    itemToValue: (item) => item.value,
+  const { data: departmentsData, isLoading: isLoadingDepartments } = useGetDepartmentsQuery({
+    page: activeTab === 'Departments' ? currentPage : 1,
+    limit: activeTab === 'Departments' ? itemsPerPage : 10,
   });
 
-  const statusCollection = createListCollection({
-    items: statusOptions,
-    itemToString: (item) => item.label,
-    itemToValue: (item) => item.value,
+  // Fetch all departments for dropdown (using paginated endpoint with large limit)
+  const { data: allDepartmentsData } = useGetDepartmentsQuery({
+    page: 1,
+    limit: 1000,
   });
 
-  const sectorOptions = [
-    { label: 'Banking', value: 'Banking' },
-    { label: 'Technology', value: 'Technology' },
-    { label: 'Professional Services', value: 'Professional Services' },
-  ];
-
-  const sectorCollection = createListCollection({
-    items: sectorOptions,
-    itemToString: (item) => item.label,
-    itemToValue: (item) => item.value,
+  // Fetch ALL counterparties for client-side filtering
+  const { data: counterpartiesData, isLoading: isLoadingCounterparties } = useGetCounterpartyConflictSummaryQuery({
+    page: 1,
+    limit: 10000, // Fetch all counterparties
   });
 
-  const itemsPerPageOptions = [10, 20, 50, 100].map((num) => ({
-    label: num.toString(),
-    value: num.toString(),
-  }));
-
-  const itemsPerPageCollection = createListCollection({
-    items: itemsPerPageOptions,
-    itemToString: (item) => item.label,
-    itemToValue: (item) => item.value,
+  const { data: sectorsData, isLoading: isLoadingSectors } = useGetSectorsQuery({
+    page: activeTab === 'Sectors' ? currentPage : 1,
+    limit: activeTab === 'Sectors' ? itemsPerPage : 10,
   });
 
-  // Filter data
+  const { data: activeSectorsData } = useGetActiveSectorsQuery({
+    page: 1,
+    limit: 100,
+  });
+
+  const { data: activityLogsData, isLoading: isLoadingActivityLogs } = useGetUserActivitiesQuery({
+    page: activeTab === 'Activity log' ? currentPage : 1,
+    limit: activeTab === 'Activity log' ? itemsPerPage : 10,
+  });
+
+  const { data: auditLogsData, isLoading: isLoadingAuditLogs } = useGetAuditLogsQuery({
+    page: activeTab === 'Audit Trail' ? currentPage : 1,
+    limit: activeTab === 'Audit Trail' ? itemsPerPage : 10,
+  });
+
+  // API Mutations
+  const [createUser, { isLoading: isCreatingUser }] = useCreateUserMutation();
+  const [updateUser, { isLoading: isUpdatingUser }] = useUpdateUserMutation();
+  const [deleteUser, { isLoading: isDeletingUser }] = useDeleteUserMutation();
+  const [activateUser] = useActivateUserMutation();
+  const [deactivateUser] = useDeactivateUserMutation();
+
+  const [createDepartment, { isLoading: isCreatingDepartment }] = useCreateDepartmentMutation();
+  const [updateDepartment, { isLoading: isUpdatingDepartment }] = useUpdateDepartmentMutation();
+  const [deleteDepartment, { isLoading: isDeletingDepartment }] = useDeleteDepartmentMutation();
+
+  const [createCounterparty, { isLoading: isCreatingCounterparty }] = useCreateCounterpartyMutation();
+  const [updateCounterparty, { isLoading: isUpdatingCounterparty }] = useUpdateCounterpartyMutation();
+  const [deleteCounterparty, { isLoading: isDeletingCounterparty }] = useDeleteCounterpartyMutation();
+
+  const [createSector, { isLoading: isCreatingSector }] = useCreateSectorMutation();
+  const [updateSector, { isLoading: isUpdatingSector }] = useUpdateSectorMutation();
+  const [deleteSector, { isLoading: isDeletingSector }] = useDeleteSectorMutation();
+
+  // Reset page when tab changes
+  useEffect(() => {
+    setCurrentPage(1);
+    setSearchQuery('');
+  }, [activeTab]);
+
+  // Reset page when filters change for Employees tab
+  useEffect(() => {
+    if (activeTab === 'Employees') {
+      setCurrentPage(1);
+    }
+  }, [selectedDepartment, selectedStatus, searchQuery, activeTab]);
+
+  // Reset page when filters change for Counterparties tab
+  useEffect(() => {
+    if (activeTab === 'Counterparties') {
+      setCurrentPage(1);
+    }
+  }, [selectedSector, searchQuery, activeTab]);
+
+  const tabs = ['Employees', 'Departments', 'Counterparties', 'Sectors', 'Activity log', 'Audit Trail'];
+
+  // Get current tab data
+  const getCurrentTabData = () => {
+    switch (activeTab) {
+      case 'Employees':
+        return {
+          data: usersData?.data?.result || [],
+          totalRecords: usersData?.data?.totalRecords || 0,
+          totalPages: usersData?.data?.totalPages || 1,
+          isLoading: isLoadingUsers,
+        };
+      case 'Departments':
+        return {
+          data: departmentsData?.data?.result || [],
+          totalRecords: departmentsData?.data?.totalRecords || 0,
+          totalPages: departmentsData?.data?.totalPages || 1,
+          isLoading: isLoadingDepartments,
+        };
+      case 'Counterparties':
+        return {
+          data: counterpartiesData?.data?.result?.map((item: any) => ({
+            id: item.id,
+            name: item.counterparty,
+            sectorName: item.sector,
+            conflictCount: item.numberOfConflictsDeclared,
+          })) || [],
+          totalRecords: counterpartiesData?.data?.totalRecords || 0,
+          totalPages: counterpartiesData?.data?.totalPages || 1,
+          isLoading: isLoadingCounterparties,
+        };
+      case 'Sectors':
+        return {
+          data: sectorsData?.data?.result || [],
+          totalRecords: sectorsData?.data?.totalRecords || 0,
+          totalPages: sectorsData?.data?.totalPages || 1,
+          isLoading: isLoadingSectors,
+        };
+      case 'Activity log':
+        return {
+          data: activityLogsData?.data?.result || [],
+          totalRecords: activityLogsData?.data?.totalRecords || 0,
+          totalPages: activityLogsData?.data?.totalPages || 1,
+          isLoading: isLoadingActivityLogs,
+        };
+      case 'Audit Trail':
+        return {
+          data: auditLogsData?.data?.result || [],
+          totalRecords: auditLogsData?.data?.totalRecords || 0,
+          totalPages: auditLogsData?.data?.totalPages || 1,
+          isLoading: isLoadingAuditLogs,
+        };
+      default:
+        return { data: [], totalRecords: 0, totalPages: 1, isLoading: false };
+    }
+  };
+
+  const { data, totalRecords, totalPages, isLoading } = getCurrentTabData();
+
+  // Filter data client-side
   const filteredData = useMemo(() => {
-    return employees.filter((item) => {
-      const matchesSearch =
-        item.firstName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.lastName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.email.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesDepartment = !selectedDepartment || item.department === selectedDepartment;
-      const matchesRole = !selectedRole || item.role === selectedRole;
-      const matchesStatus =
-        !selectedStatus ||
-        (selectedStatus === 'active' && item.isActive) ||
-        (selectedStatus === 'inactive' && !item.isActive);
+    if (activeTab === 'Employees') {
+      const filtered = data.filter((item: any) => {
+        const fullName = `${item.firstName} ${item.lastName}`.toLowerCase();
+        const matchesSearch = searchQuery === '' || fullName.includes(searchQuery.toLowerCase()) || item.email.toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesDepartment = !selectedDepartment || item.department?.name === selectedDepartment;
 
-      return matchesSearch && matchesDepartment && matchesRole && matchesStatus;
-    });
-  }, [employees, searchQuery, selectedDepartment, selectedRole, selectedStatus]);
+        // Debug status filtering
+        let matchesStatus = true;
+        if (selectedStatus) {
+          if (selectedStatus === 'active') {
+            matchesStatus = item.status === 1;
+          } else if (selectedStatus === 'inactive') {
+            matchesStatus = item.status === 0;
+          }
+        }
 
-  // Pagination
-  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
+        return matchesSearch && matchesDepartment && matchesStatus;
+      });
+
+      return filtered;
+    } else if (activeTab === 'Counterparties') {
+      return data.filter((item: any) => {
+        const matchesSearch = searchQuery === '' || item.name.toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesSector = !selectedSector || item.sectorName === selectedSector;
+        return matchesSearch && matchesSector;
+      });
+    } else {
+      return data.filter((item: any) => {
+        if (activeTab === 'Departments' || activeTab === 'Sectors') {
+          return searchQuery === '' || item.name.toLowerCase().includes(searchQuery.toLowerCase());
+        }
+        return true;
+      });
+    }
+  }, [data, searchQuery, activeTab, selectedDepartment, selectedStatus, selectedSector]);
+
+  // Pagination - Apply to filtered data
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedData = filteredData.slice(startIndex, startIndex + itemsPerPage);
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedData = (activeTab === 'Employees' || activeTab === 'Counterparties')
+    ? filteredData.slice(startIndex, endIndex)
+    : filteredData;
 
-  // Generate page numbers
+  // Calculate total pages based on filtered data for client-side filtered tabs
+  const actualTotalPages = (activeTab === 'Employees' || activeTab === 'Counterparties')
+    ? Math.ceil(filteredData.length / itemsPerPage)
+    : totalPages;
+  const actualTotalRecords = (activeTab === 'Employees' || activeTab === 'Counterparties')
+    ? filteredData.length
+    : totalRecords;
+
   const renderPageNumbers = useMemo(() => {
+    const pagesToShow = (activeTab === 'Employees' || activeTab === 'Counterparties') ? actualTotalPages : totalPages;
     const pages: (number | string)[] = [];
-    if (totalPages <= 10) {
-      for (let i = 1; i <= totalPages; i++) {
+    if (pagesToShow <= 10) {
+      for (let i = 1; i <= pagesToShow; i++) {
         pages.push(i);
       }
     } else {
       pages.push(1);
       if (currentPage > 3) pages.push('...');
-      for (
-        let i = Math.max(2, currentPage - 1);
-        i <= Math.min(totalPages - 1, currentPage + 1);
-        i++
-      ) {
+      for (let i = Math.max(2, currentPage - 1); i <= Math.min(pagesToShow - 1, currentPage + 1); i++) {
         pages.push(i);
       }
-      if (currentPage < totalPages - 2) pages.push('...');
-      pages.push(totalPages);
+      if (currentPage < pagesToShow - 2) pages.push('...');
+      pages.push(pagesToShow);
     }
     return pages;
-  }, [currentPage, totalPages]);
+  }, [currentPage, totalPages, actualTotalPages, activeTab]);
 
-  const handleToggleStatus = (employeeId: string) => {
-    setEmployees((prev) =>
-      prev.map((emp) =>
-        emp._id === employeeId ? { ...emp, isActive: !emp.isActive } : emp
-      )
-    );
+  // User/Employee handlers
+  const handleToggleUserStatus = async (userId: string, currentStatus: number) => {
+    try {
+      if (currentStatus === 1) {
+        await deactivateUser(userId).unwrap();
+        toaster.success({ title: 'User deactivated successfully' });
+      } else {
+        await activateUser(userId).unwrap();
+        toaster.success({ title: 'User activated successfully' });
+      }
+    } catch (error: any) {
+      toaster.error({ title: 'Error', description: error?.data?.message || 'Failed to update user status' });
+    }
   };
 
-  const handleEdit = (employeeId: string) => {
-    console.log('Edit employee:', employeeId);
-    // Navigate to edit page or open edit modal
-    // For now, just log the action
+  const handleEditUser = (user: any) => {
+    setUserToEdit(user);
+    setNewUser({
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+      departmentId: user.department.id,
+      role: user.role,
+    });
+    setShowEditUserModal(true);
   };
 
-  const handleDelete = (employeeId: string) => {
-    setEmployeeToDelete(employeeId);
+  const handleDeleteUser = (userId: string) => {
+    setUserToDelete(userId);
     setShowDeleteModal(true);
   };
 
-  const confirmDelete = () => {
-    if (employeeToDelete) {
-      setEmployees((prev) => prev.filter((emp) => emp._id !== employeeToDelete));
-      setShowDeleteModal(false);
-      setEmployeeToDelete(null);
+  const confirmDeleteUser = async () => {
+    if (userToDelete) {
+      try {
+        await deleteUser(userToDelete).unwrap();
+        toaster.success({ title: 'User deleted successfully' });
+        setShowDeleteModal(false);
+        setUserToDelete(null);
+      } catch (error: any) {
+        toaster.error({ title: 'Error', description: error?.data?.message || 'Failed to delete user' });
+      }
     }
   };
 
-  const cancelDelete = () => {
-    setShowDeleteModal(false);
-    setEmployeeToDelete(null);
-  };
+  const handleAddUser = async () => {
+    if (!newUser.firstName || !newUser.lastName || !newUser.email || !newUser.departmentId) {
+      toaster.error({ title: 'Error', description: 'Please fill all required fields' });
+      return;
+    }
 
-  const handleAddEmployee = () => {
-    if (newEmployee.firstName && newEmployee.lastName && newEmployee.email && newEmployee.department && newEmployee.role) {
-      const employee = {
-        _id: (employees.length + 1).toString(),
-        firstName: newEmployee.firstName,
-        lastName: newEmployee.lastName,
-        email: newEmployee.email,
-        department: newEmployee.department,
-        role: newEmployee.role,
-        isActive: true,
-      };
-      setEmployees((prev) => [...prev, employee]);
-      setShowAddModal(false);
-      setNewEmployee({
-        firstName: '',
-        lastName: '',
-        email: '',
-        department: '',
-        role: '',
-      });
+    try {
+      await createUser(newUser).unwrap();
+      toaster.success({ title: 'User created successfully' });
+      setShowAddUserModal(false);
+      setNewUser({ firstName: '', lastName: '', email: '', departmentId: '', role: 1 });
+    } catch (error: any) {
+      toaster.error({ title: 'Error', description: error?.data?.message || 'Failed to create user' });
     }
   };
 
-  const cancelAddEmployee = () => {
-    setShowAddModal(false);
-    setNewEmployee({
-      firstName: '',
-      lastName: '',
-      email: '',
-      department: '',
-      role: '',
+  const handleUpdateUser = async () => {
+    if (!userToEdit || !newUser.firstName || !newUser.lastName || !newUser.email || !newUser.departmentId) {
+      toaster.error({ title: 'Error', description: 'Please fill all required fields' });
+      return;
+    }
+
+    try {
+      await updateUser({ id: userToEdit.id, data: newUser }).unwrap();
+      toaster.success({ title: 'User updated successfully' });
+      setShowEditUserModal(false);
+      setUserToEdit(null);
+      setNewUser({ firstName: '', lastName: '', email: '', departmentId: '', role: 1 });
+    } catch (error: any) {
+      toaster.error({ title: 'Error', description: error?.data?.message || 'Failed to update user' });
+    }
+  };
+
+  // Department handlers
+  const handleEditDepartment = (department: any) => {
+    setDepartmentToEdit(department);
+    setNewDepartment({
+      name: department.name,
+      description: department.description || '',
+      code: department.code || '',
     });
-  };
-
-  // Roles handlers
-  const handleEditRole = (roleId: string) => {
-    const role = roles.find((r) => r._id === roleId);
-    if (role) {
-      setRoleToEdit(roleId);
-      setEditRole({
-        name: role.name,
-        description: role.description,
-      });
-      setShowEditRoleModal(true);
-    }
-  };
-
-  const handleDeleteRole = (roleId: string) => {
-    setRoleToDelete(roleId);
-    setShowDeleteRoleModal(true);
-  };
-
-  const confirmDeleteRole = () => {
-    if (roleToDelete) {
-      setRoles((prev) => prev.filter((role) => role._id !== roleToDelete));
-      setShowDeleteRoleModal(false);
-      setRoleToDelete(null);
-    }
-  };
-
-  const cancelDeleteRole = () => {
-    setShowDeleteRoleModal(false);
-    setRoleToDelete(null);
-  };
-
-  const handleAddRole = () => {
-    if (newRole.name && newRole.description) {
-      const role = {
-        _id: (roles.length + 1).toString(),
-        name: newRole.name,
-        description: newRole.description,
-      };
-      setRoles((prev) => [...prev, role]);
-      setShowAddRoleModal(false);
-      setNewRole({
-        name: '',
-        description: '',
-      });
-    }
-  };
-
-  const cancelAddRole = () => {
-    setShowAddRoleModal(false);
-    setNewRole({
-      name: '',
-      description: '',
-    });
-  };
-
-  const handleUpdateRole = () => {
-    if (roleToEdit && editRole.name && editRole.description) {
-      setRoles((prev) =>
-        prev.map((role) =>
-          role._id === roleToEdit
-            ? { ...role, name: editRole.name, description: editRole.description }
-            : role
-        )
-      );
-      setShowEditRoleModal(false);
-      setRoleToEdit(null);
-      setEditRole({
-        name: '',
-        description: '',
-      });
-    }
-  };
-
-  const cancelEditRole = () => {
-    setShowEditRoleModal(false);
-    setRoleToEdit(null);
-    setEditRole({
-      name: '',
-      description: '',
-    });
-  };
-
-  // Departments handlers
-  const handleEditDepartment = (departmentId: string) => {
-    const department = departments.find((d) => d._id === departmentId);
-    if (department) {
-      setDepartmentToEdit(departmentId);
-      setEditDepartment({
-        name: department.name,
-        description: department.description,
-      });
-      setShowEditDepartmentModal(true);
-    }
+    setShowEditDepartmentModal(true);
   };
 
   const handleDeleteDepartment = (departmentId: string) => {
@@ -479,82 +423,60 @@ const SettingsPage = () => {
     setShowDeleteDepartmentModal(true);
   };
 
-  const confirmDeleteDepartment = () => {
+  const confirmDeleteDepartment = async () => {
     if (departmentToDelete) {
-      setDepartments((prev) => prev.filter((dept) => dept._id !== departmentToDelete));
-      setShowDeleteDepartmentModal(false);
-      setDepartmentToDelete(null);
+      try {
+        await deleteDepartment(departmentToDelete).unwrap();
+        toaster.success({ title: 'Department deleted successfully' });
+        setShowDeleteDepartmentModal(false);
+        setDepartmentToDelete(null);
+      } catch (error: any) {
+        toaster.error({ title: 'Error', description: error?.data?.message || 'Failed to delete department' });
+      }
     }
   };
 
-  const cancelDeleteDepartment = () => {
-    setShowDeleteDepartmentModal(false);
-    setDepartmentToDelete(null);
-  };
+  const handleAddDepartment = async () => {
+    if (!newDepartment.name) {
+      toaster.error({ title: 'Error', description: 'Please enter department name' });
+      return;
+    }
 
-  const handleAddDepartment = () => {
-    if (newDepartment.name && newDepartment.description) {
-      const department = {
-        _id: (departments.length + 1).toString(),
-        name: newDepartment.name,
-        description: newDepartment.description,
-      };
-      setDepartments((prev) => [...prev, department]);
+    try {
+      await createDepartment(newDepartment).unwrap();
+      toaster.success({ title: 'Department created successfully' });
       setShowAddDepartmentModal(false);
-      setNewDepartment({
-        name: '',
-        description: '',
-      });
+      setNewDepartment({ name: '', description: '', code: '' });
+    } catch (error: any) {
+      toaster.error({ title: 'Error', description: error?.data?.message || 'Failed to create department' });
     }
   };
 
-  const cancelAddDepartment = () => {
-    setShowAddDepartmentModal(false);
-    setNewDepartment({
-      name: '',
-      description: '',
-    });
-  };
+  const handleUpdateDepartment = async () => {
+    if (!departmentToEdit || !newDepartment.name) {
+      toaster.error({ title: 'Error', description: 'Please enter department name' });
+      return;
+    }
 
-  const handleUpdateDepartment = () => {
-    if (departmentToEdit && editDepartment.name && editDepartment.description) {
-      setDepartments((prev) =>
-        prev.map((dept) =>
-          dept._id === departmentToEdit
-            ? { ...dept, name: editDepartment.name, description: editDepartment.description }
-            : dept
-        )
-      );
+    try {
+      await updateDepartment({ id: departmentToEdit.id, data: newDepartment }).unwrap();
+      toaster.success({ title: 'Department updated successfully' });
       setShowEditDepartmentModal(false);
       setDepartmentToEdit(null);
-      setEditDepartment({
-        name: '',
-        description: '',
-      });
+      setNewDepartment({ name: '', description: '', code: '' });
+    } catch (error: any) {
+      toaster.error({ title: 'Error', description: error?.data?.message || 'Failed to update department' });
     }
   };
 
-  const cancelEditDepartment = () => {
-    setShowEditDepartmentModal(false);
-    setDepartmentToEdit(null);
-    setEditDepartment({
-      name: '',
-      description: '',
+  // Counterparty handlers
+  const handleEditCounterparty = (counterparty: any) => {
+    setCounterpartyToEdit(counterparty);
+    setNewCounterparty({
+      name: counterparty.name,
+      sectorId: counterparty.sectorId,
     });
-  };
-
-  // Counterparties handlers
-  const handleEditCounterparty = (counterpartyId: string) => {
-    const counterparty = counterparties.find((c) => c._id === counterpartyId);
-    if (counterparty) {
-      setCounterpartyToEdit(counterpartyId);
-      setEditCounterparty({
-        name: counterparty.name,
-        description: counterparty.description,
-        sector: counterparty.sector,
-      });
-      setShowEditCounterpartyModal(true);
-    }
+    setShowEditCounterpartyModal(true);
   };
 
   const handleDeleteCounterparty = (counterpartyId: string) => {
@@ -562,86 +484,61 @@ const SettingsPage = () => {
     setShowDeleteCounterpartyModal(true);
   };
 
-  const confirmDeleteCounterparty = () => {
+  const confirmDeleteCounterparty = async () => {
     if (counterpartyToDelete) {
-      setCounterparties((prev) => prev.filter((cp) => cp._id !== counterpartyToDelete));
-      setShowDeleteCounterpartyModal(false);
-      setCounterpartyToDelete(null);
+      try {
+        await deleteCounterparty(counterpartyToDelete).unwrap();
+        toaster.success({ title: 'Counterparty deleted successfully' });
+        setShowDeleteCounterpartyModal(false);
+        setCounterpartyToDelete(null);
+      } catch (error: any) {
+        toaster.error({ title: 'Error', description: error?.data?.message || 'Failed to delete counterparty' });
+      }
     }
   };
 
-  const cancelDeleteCounterparty = () => {
-    setShowDeleteCounterpartyModal(false);
-    setCounterpartyToDelete(null);
-  };
+  const handleAddCounterparty = async () => {
+    if (!newCounterparty.name || !newCounterparty.sectorId) {
+      toaster.error({ title: 'Error', description: 'Please fill all required fields' });
+      return;
+    }
 
-  const handleAddCounterparty = () => {
-    if (newCounterparty.name && newCounterparty.description && newCounterparty.sector) {
-      const counterparty = {
-        _id: (counterparties.length + 1).toString(),
-        name: newCounterparty.name,
-        description: newCounterparty.description,
-        sector: newCounterparty.sector,
-      };
-      setCounterparties((prev) => [...prev, counterparty]);
+    try {
+      await createCounterparty(newCounterparty).unwrap();
+      toaster.success({ title: 'Counterparty created successfully' });
       setShowAddCounterpartyModal(false);
-      setNewCounterparty({
-        name: '',
-        description: '',
-        sector: '',
-      });
+      setNewCounterparty({ name: '', sectorId: '' });
+    } catch (error: any) {
+      toaster.error({ title: 'Error', description: error?.data?.message || 'Failed to create counterparty' });
     }
   };
 
-  const cancelAddCounterparty = () => {
-    setShowAddCounterpartyModal(false);
-    setNewCounterparty({
-      name: '',
-      description: '',
-      sector: '',
-    });
-  };
+  const handleUpdateCounterparty = async () => {
+    if (!counterpartyToEdit || !newCounterparty.name || !newCounterparty.sectorId) {
+      toaster.error({ title: 'Error', description: 'Please fill all required fields' });
+      return;
+    }
 
-  const handleUpdateCounterparty = () => {
-    if (counterpartyToEdit && editCounterparty.name && editCounterparty.description && editCounterparty.sector) {
-      setCounterparties((prev) =>
-        prev.map((cp) =>
-          cp._id === counterpartyToEdit
-            ? { ...cp, name: editCounterparty.name, description: editCounterparty.description, sector: editCounterparty.sector }
-            : cp
-        )
-      );
+    try {
+      await updateCounterparty({ id: counterpartyToEdit.id, data: newCounterparty }).unwrap();
+      toaster.success({ title: 'Counterparty updated successfully' });
       setShowEditCounterpartyModal(false);
       setCounterpartyToEdit(null);
-      setEditCounterparty({
-        name: '',
-        description: '',
-        sector: '',
-      });
+      setNewCounterparty({ name: '', sectorId: '' });
+    } catch (error: any) {
+      toaster.error({ title: 'Error', description: error?.data?.message || 'Failed to update counterparty' });
     }
   };
 
-  const cancelEditCounterparty = () => {
-    setShowEditCounterpartyModal(false);
-    setCounterpartyToEdit(null);
-    setEditCounterparty({
-      name: '',
-      description: '',
-      sector: '',
+  // Sector handlers
+  const handleEditSector = (sector: any) => {
+    setSectorToEdit(sector);
+    setNewSector({
+      name: sector.name,
+      description: sector.description || '',
+      isActive: sector.isActive,
     });
-  };
-
-  // Sectors handlers
-  const handleEditSector = (sectorId: string) => {
-    const sector = sectors.find((s) => s._id === sectorId);
-    if (sector) {
-      setSectorToEdit(sectorId);
-      setEditSector({
-        name: sector.name,
-        description: sector.description,
-      });
-      setShowEditSectorModal(true);
-    }
+    setShowEditSectorModal(true);
   };
 
   const handleDeleteSector = (sectorId: string) => {
@@ -649,3717 +546,1332 @@ const SettingsPage = () => {
     setShowDeleteSectorModal(true);
   };
 
-  const confirmDeleteSector = () => {
+  const confirmDeleteSector = async () => {
     if (sectorToDelete) {
-      setSectors((prev) => prev.filter((s) => s._id !== sectorToDelete));
-      setShowDeleteSectorModal(false);
-      setSectorToDelete(null);
+      try {
+        await deleteSector(sectorToDelete).unwrap();
+        toaster.success({ title: 'Sector deleted successfully' });
+        setShowDeleteSectorModal(false);
+        setSectorToDelete(null);
+      } catch (error: any) {
+        toaster.error({ title: 'Error', description: error?.data?.message || 'Failed to delete sector' });
+      }
     }
   };
 
-  const cancelDeleteSector = () => {
-    setShowDeleteSectorModal(false);
-    setSectorToDelete(null);
-  };
+  const handleAddSector = async () => {
+    if (!newSector.name) {
+      toaster.error({ title: 'Error', description: 'Please enter sector name' });
+      return;
+    }
 
-  const handleAddSector = () => {
-    if (newSector.name && newSector.description) {
-      const sector = {
-        _id: (sectors.length + 1).toString(),
-        name: newSector.name,
-        description: newSector.description,
-      };
-      setSectors((prev) => [...prev, sector]);
+    try {
+      await createSector(newSector).unwrap();
+      toaster.success({ title: 'Sector created successfully' });
       setShowAddSectorModal(false);
-      setNewSector({
-        name: '',
-        description: '',
-      });
+      setNewSector({ name: '', description: '', isActive: true });
+    } catch (error: any) {
+      toaster.error({ title: 'Error', description: error?.data?.message || 'Failed to create sector' });
     }
   };
 
-  const cancelAddSector = () => {
-    setShowAddSectorModal(false);
-    setNewSector({
-      name: '',
-      description: '',
-    });
-  };
+  const handleUpdateSector = async () => {
+    if (!sectorToEdit || !newSector.name) {
+      toaster.error({ title: 'Error', description: 'Please enter sector name' });
+      return;
+    }
 
-  const handleUpdateSector = () => {
-    if (sectorToEdit && editSector.name && editSector.description) {
-      setSectors((prev) =>
-        prev.map((s) =>
-          s._id === sectorToEdit
-            ? { ...s, name: editSector.name, description: editSector.description }
-            : s
-        )
-      );
+    try {
+      await updateSector({ id: sectorToEdit.id, data: newSector }).unwrap();
+      toaster.success({ title: 'Sector updated successfully' });
       setShowEditSectorModal(false);
       setSectorToEdit(null);
-      setEditSector({
-        name: '',
-        description: '',
-      });
+      setNewSector({ name: '', description: '', isActive: true });
+    } catch (error: any) {
+      toaster.error({ title: 'Error', description: error?.data?.message || 'Failed to update sector' });
     }
   };
 
-  const cancelEditSector = () => {
-    setShowEditSectorModal(false);
-    setSectorToEdit(null);
-    setEditSector({
-      name: '',
-      description: '',
+  // Collections for filters - Extract departments from users data
+  const departmentOptions = useMemo(() => {
+    if (!usersData?.data?.result) return [{ label: 'All Departments', value: '' }];
+
+    const departments = new Set<string>();
+    usersData.data.result.forEach((user: any) => {
+      if (user.department?.name) {
+        departments.add(user.department.name);
+      }
     });
-  };
 
-  // Filter and paginate roles
-  const filteredRoles = useMemo(() => {
-    return roles.filter((item) => {
-      const matchesSearch =
-        item.name.toLowerCase().includes(rolesSearchQuery.toLowerCase()) ||
-        item.description.toLowerCase().includes(rolesSearchQuery.toLowerCase());
-      return matchesSearch;
-    });
-  }, [roles, rolesSearchQuery]);
+    return [
+      { label: 'All Departments', value: '' },
+      ...Array.from(departments).sort().map((dept) => ({
+        label: dept,
+        value: dept,
+      }))
+    ];
+  }, [usersData]);
 
-  const rolesTotalPages = Math.ceil(filteredRoles.length / rolesItemsPerPage);
-  const rolesStartIndex = (rolesCurrentPage - 1) * rolesItemsPerPage;
-  const paginatedRoles = filteredRoles.slice(rolesStartIndex, rolesStartIndex + rolesItemsPerPage);
+  const sectorOptions = useMemo(() => {
+    if (!activeSectorsData?.data?.result) return [{ label: 'All Sectors', value: '' }];
+    return [
+      { label: 'All Sectors', value: '' },
+      ...activeSectorsData.data.result.map((sector: any) => ({
+        label: sector.name,
+        value: sector.name,
+      }))
+    ];
+  }, [activeSectorsData]);
 
-  const renderRolesPageNumbers = useMemo(() => {
-    const pages: (number | string)[] = [];
-    if (rolesTotalPages <= 10) {
-      for (let i = 1; i <= rolesTotalPages; i++) {
-        pages.push(i);
-      }
-    } else {
-      pages.push(1);
-      if (rolesCurrentPage > 3) pages.push('...');
-      for (
-        let i = Math.max(2, rolesCurrentPage - 1);
-        i <= Math.min(rolesTotalPages - 1, rolesCurrentPage + 1);
-        i++
-      ) {
-        pages.push(i);
-      }
-      if (rolesCurrentPage < rolesTotalPages - 2) pages.push('...');
-      pages.push(rolesTotalPages);
-    }
-    return pages;
-  }, [rolesCurrentPage, rolesTotalPages]);
+  const sectorOptionsForCreate = useMemo(() => {
+    if (!activeSectorsData?.data?.result) return [];
+    return activeSectorsData.data.result.map((sector: any) => ({
+      label: sector.name,
+      value: sector.id,
+    }));
+  }, [activeSectorsData]);
 
-  // Filter and paginate departments
-  const filteredDepartments = useMemo(() => {
-    return departments.filter((item) => {
-      const matchesSearch =
-        item.name.toLowerCase().includes(departmentsSearchQuery.toLowerCase()) ||
-        item.description.toLowerCase().includes(departmentsSearchQuery.toLowerCase());
-      return matchesSearch;
-    });
-  }, [departments, departmentsSearchQuery]);
+  const statusOptions = [
+    { label: 'All Statuses', value: '' },
+    { label: 'Active', value: 'active' },
+    { label: 'Inactive', value: 'inactive' },
+  ];
 
-  const departmentsTotalPages = Math.ceil(filteredDepartments.length / departmentsItemsPerPage);
-  const departmentsStartIndex = (departmentsCurrentPage - 1) * departmentsItemsPerPage;
-  const paginatedDepartments = filteredDepartments.slice(departmentsStartIndex, departmentsStartIndex + departmentsItemsPerPage);
-
-  const renderDepartmentsPageNumbers = useMemo(() => {
-    const pages: (number | string)[] = [];
-    if (departmentsTotalPages <= 10) {
-      for (let i = 1; i <= departmentsTotalPages; i++) {
-        pages.push(i);
-      }
-    } else {
-      pages.push(1);
-      if (departmentsCurrentPage > 3) pages.push('...');
-      for (
-        let i = Math.max(2, departmentsCurrentPage - 1);
-        i <= Math.min(departmentsTotalPages - 1, departmentsCurrentPage + 1);
-        i++
-      ) {
-        pages.push(i);
-      }
-      if (departmentsCurrentPage < departmentsTotalPages - 2) pages.push('...');
-      pages.push(departmentsTotalPages);
-    }
-    return pages;
-  }, [departmentsCurrentPage, departmentsTotalPages]);
-
-  // Filter and paginate counterparties
-  const filteredCounterparties = useMemo(() => {
-    return counterparties.filter((item) => {
-      const matchesSearch =
-        item.name.toLowerCase().includes(counterpartiesSearchQuery.toLowerCase()) ||
-        item.description.toLowerCase().includes(counterpartiesSearchQuery.toLowerCase()) ||
-        item.sector.toLowerCase().includes(counterpartiesSearchQuery.toLowerCase());
-      return matchesSearch;
-    });
-  }, [counterparties, counterpartiesSearchQuery]);
-
-  const counterpartiesTotalPages = Math.ceil(filteredCounterparties.length / counterpartiesItemsPerPage);
-  const counterpartiesStartIndex = (counterpartiesCurrentPage - 1) * counterpartiesItemsPerPage;
-  const paginatedCounterparties = filteredCounterparties.slice(counterpartiesStartIndex, counterpartiesStartIndex + counterpartiesItemsPerPage);
-
-  const renderCounterpartiesPageNumbers = useMemo(() => {
-    const pages: (number | string)[] = [];
-    if (counterpartiesTotalPages <= 10) {
-      for (let i = 1; i <= counterpartiesTotalPages; i++) {
-        pages.push(i);
-      }
-    } else {
-      pages.push(1);
-      if (counterpartiesCurrentPage > 3) pages.push('...');
-      for (
-        let i = Math.max(2, counterpartiesCurrentPage - 1);
-        i <= Math.min(counterpartiesTotalPages - 1, counterpartiesCurrentPage + 1);
-        i++
-      ) {
-        pages.push(i);
-      }
-      if (counterpartiesCurrentPage < counterpartiesTotalPages - 2) pages.push('...');
-      pages.push(counterpartiesTotalPages);
-    }
-    return pages;
-  }, [counterpartiesCurrentPage, counterpartiesTotalPages]);
-
-  // Filter and paginate sectors
-  const filteredSectors = useMemo(() => {
-    return sectors.filter((item) => {
-      const matchesSearch =
-        item.name.toLowerCase().includes(sectorsSearchQuery.toLowerCase()) ||
-        item.description.toLowerCase().includes(sectorsSearchQuery.toLowerCase());
-      return matchesSearch;
-    });
-  }, [sectors, sectorsSearchQuery]);
-
-  const sectorsTotalPages = Math.ceil(filteredSectors.length / sectorsItemsPerPage);
-  const sectorsStartIndex = (sectorsCurrentPage - 1) * sectorsItemsPerPage;
-  const paginatedSectors = filteredSectors.slice(sectorsStartIndex, sectorsStartIndex + sectorsItemsPerPage);
-
-  const renderSectorsPageNumbers = useMemo(() => {
-    const pages: (number | string)[] = [];
-    if (sectorsTotalPages <= 10) {
-      for (let i = 1; i <= sectorsTotalPages; i++) {
-        pages.push(i);
-      }
-    } else {
-      pages.push(1);
-      if (sectorsCurrentPage > 3) pages.push('...');
-      for (
-        let i = Math.max(2, sectorsCurrentPage - 1);
-        i <= Math.min(sectorsTotalPages - 1, sectorsCurrentPage + 1);
-        i++
-      ) {
-        pages.push(i);
-      }
-      if (sectorsCurrentPage < sectorsTotalPages - 2) pages.push('...');
-      pages.push(sectorsTotalPages);
-    }
-    return pages;
-  }, [sectorsCurrentPage, sectorsTotalPages]);
-
-  // Filter and paginate activity logs
-  const filteredActivityLogs = useMemo(() => {
-    return activityLogs.filter((item) => {
-      const matchesSearch =
-        item.fullName.toLowerCase().includes(activityLogsSearchQuery.toLowerCase()) ||
-        item.email.toLowerCase().includes(activityLogsSearchQuery.toLowerCase()) ||
-        item.action.toLowerCase().includes(activityLogsSearchQuery.toLowerCase());
-      return matchesSearch;
-    });
-  }, [activityLogs, activityLogsSearchQuery]);
-
-  const activityLogsTotalPages = Math.ceil(filteredActivityLogs.length / activityLogsItemsPerPage);
-  const activityLogsStartIndex = (activityLogsCurrentPage - 1) * activityLogsItemsPerPage;
-  const paginatedActivityLogs = filteredActivityLogs.slice(activityLogsStartIndex, activityLogsStartIndex + activityLogsItemsPerPage);
-
-  const renderActivityLogsPageNumbers = useMemo(() => {
-    const pages: (number | string)[] = [];
-    if (activityLogsTotalPages <= 10) {
-      for (let i = 1; i <= activityLogsTotalPages; i++) {
-        pages.push(i);
-      }
-    } else {
-      pages.push(1);
-      if (activityLogsCurrentPage > 3) pages.push('...');
-      for (
-        let i = Math.max(2, activityLogsCurrentPage - 1);
-        i <= Math.min(activityLogsTotalPages - 1, activityLogsCurrentPage + 1);
-        i++
-      ) {
-        pages.push(i);
-      }
-      if (activityLogsCurrentPage < activityLogsTotalPages - 2) pages.push('...');
-      pages.push(activityLogsTotalPages);
-    }
-    return pages;
-  }, [activityLogsCurrentPage, activityLogsTotalPages]);
+  const itemsPerPageOptions = [10, 20, 50, 100].map((num) => ({
+    label: num.toString(),
+    value: num.toString(),
+  }));
 
   return (
     <AdminLayout>
       <Box px={{ base: 4, md: 6 }} py={6}>
         {/* Header */}
-        <HStack justify="space-between" mb={6}>
-          <Text fontSize="24px" fontWeight="600" color="#2C3E50">
-            Settings
-          </Text>
-
-          {activeTab === 'Employees' && (
-            <Button
-              bg="#1B3242"
-              color="white"
-              fontSize="14px"
-              fontWeight="500"
-              px={6}
-              h="40px"
-              borderRadius="8px"
-              _hover={{ bg: '#0F1F2D' }}
-              onClick={() => setShowAddModal(true)}
-            >
-              Add Employee
-            </Button>
-          )}
-
-          {activeTab === 'Roles' && (
-            <Button
-              bg="#1B3242"
-              color="white"
-              fontSize="14px"
-              fontWeight="500"
-              px={6}
-              h="40px"
-              borderRadius="8px"
-              _hover={{ bg: '#0F1F2D' }}
-              onClick={() => setShowAddRoleModal(true)}
-            >
-              Add Role
-            </Button>
-          )}
-
-          {activeTab === 'Departments' && (
-            <Button
-              bg="#1B3242"
-              color="white"
-              fontSize="14px"
-              fontWeight="500"
-              px={6}
-              h="40px"
-              borderRadius="8px"
-              _hover={{ bg: '#0F1F2D' }}
-              onClick={() => setShowAddDepartmentModal(true)}
-            >
-              Add Department
-            </Button>
-          )}
-
-          {activeTab === 'Counterparties' && (
-            <Button
-              bg="#1B3242"
-              color="white"
-              fontSize="14px"
-              fontWeight="500"
-              px={6}
-              h="40px"
-              borderRadius="8px"
-              _hover={{ bg: '#0F1F2D' }}
-              onClick={() => setShowAddCounterpartyModal(true)}
-            >
-              Add Counterparty
-            </Button>
-          )}
-
-          {activeTab === 'Sectors' && (
-            <Button
-              bg="#1B3242"
-              color="white"
-              fontSize="14px"
-              fontWeight="500"
-              px={6}
-              h="40px"
-              borderRadius="8px"
-              _hover={{ bg: '#0F1F2D' }}
-              onClick={() => setShowAddSectorModal(true)}
-            >
-              Add Sector
-            </Button>
-          )}
-        </HStack>
+        <Text fontSize="24px" fontWeight="600" color="#2C3E50" mb={6}>
+          Settings
+        </Text>
 
         {/* Tabs */}
-        <HStack gap={0} mb={6} borderBottom="1px solid #E6E7EC" overflowX="auto">
+        <HStack gap={0} mb={6} overflowX="auto" flexWrap="wrap">
           {tabs.map((tab) => (
             <Box
               key={tab}
               px={6}
               py={3}
+              bg={activeTab === tab ? '#2C3E50' : '#E5E7EB'}
+              color={activeTab === tab ? 'white' : '#666'}
               cursor="pointer"
-              borderBottom="2px solid"
-              borderColor={activeTab === tab ? '#227CBF' : 'transparent'}
-              color={activeTab === tab ? '#227CBF' : '#666'}
-              fontSize="14px"
-              fontWeight={activeTab === tab ? '600' : '400'}
               onClick={() => setActiveTab(tab)}
-              _hover={{ color: '#227CBF' }}
+              fontSize="14px"
+              fontWeight="500"
               transition="all 0.2s"
-              whiteSpace="nowrap"
+              borderRadius={tab === tabs[0] ? '8px 0 0 8px' : tab === tabs[tabs.length - 1] ? '0 8px 8px 0' : '0'}
+              _hover={{ bg: activeTab === tab ? '#2C3E50' : '#D1D5DB' }}
+              minW="fit-content"
             >
               {tab}
             </Box>
           ))}
         </HStack>
 
-        {/* Content based on active tab */}
-        {activeTab === 'Employees' && (
-          <Box bg="white" borderRadius="12px" p={6}>
-            {/* Filters */}
-            <HStack gap={3} mb={6} flexWrap="wrap" align="center">
-              {/* Department Filter */}
-              <Box minW="140px" maxW="180px">
-                <ChakraSelect.Root
-                  collection={departmentCollection}
-                  size="sm"
-                  value={[selectedDepartment]}
-                  onValueChange={(e) => setSelectedDepartment(e.value[0])}
-                >
-                  <ChakraSelect.Trigger
-                    bg="white"
-                    borderColor="#D1D5DB"
-                    _hover={{ borderColor: '#9CA3AF' }}
-                    borderRadius="6px"
-                    height="40px"
-                  >
-                    <ChakraSelect.ValueText placeholder="Department" />
-                    <ChakraSelect.Indicator />
-                  </ChakraSelect.Trigger>
-                  <ChakraSelect.Content
-                    bg="white"
-                    borderRadius="8px"
-                    boxShadow="lg"
-                    zIndex={1500}
-                    position="absolute"
-                  >
-                    {departmentOptions.map((option) => (
-                      <ChakraSelect.Item key={option.value} item={option}>
-                        {option.label}
-                      </ChakraSelect.Item>
-                    ))}
-                  </ChakraSelect.Content>
-                </ChakraSelect.Root>
-              </Box>
-
-              {/* Role Filter */}
-              <Box minW="140px" maxW="180px">
-                <ChakraSelect.Root
-                  collection={roleCollection}
-                  size="sm"
-                  value={[selectedRole]}
-                  onValueChange={(e) => setSelectedRole(e.value[0])}
-                >
-                  <ChakraSelect.Trigger
-                    bg="white"
-                    borderColor="#D1D5DB"
-                    _hover={{ borderColor: '#9CA3AF' }}
-                    borderRadius="6px"
-                    height="40px"
-                  >
-                    <ChakraSelect.ValueText placeholder="Role" />
-                    <ChakraSelect.Indicator />
-                  </ChakraSelect.Trigger>
-                  <ChakraSelect.Content
-                    bg="white"
-                    borderRadius="8px"
-                    boxShadow="lg"
-                    zIndex={1500}
-                    position="absolute"
-                  >
-                    {roleOptions.map((option) => (
-                      <ChakraSelect.Item key={option.value} item={option}>
-                        {option.label}
-                      </ChakraSelect.Item>
-                    ))}
-                  </ChakraSelect.Content>
-                </ChakraSelect.Root>
-              </Box>
-
-              {/* Status Filter */}
-              <Box minW="140px" maxW="180px">
-                <ChakraSelect.Root
-                  collection={statusCollection}
-                  size="sm"
-                  value={[selectedStatus]}
-                  onValueChange={(e) => setSelectedStatus(e.value[0])}
-                >
-                  <ChakraSelect.Trigger
-                    bg="white"
-                    borderColor="#D1D5DB"
-                    _hover={{ borderColor: '#9CA3AF' }}
-                    borderRadius="6px"
-                    height="40px"
-                  >
-                    <ChakraSelect.ValueText placeholder="Status" />
-                    <ChakraSelect.Indicator />
-                  </ChakraSelect.Trigger>
-                  <ChakraSelect.Content
-                    bg="white"
-                    borderRadius="8px"
-                    boxShadow="lg"
-                    zIndex={1500}
-                    position="absolute"
-                  >
-                    {statusOptions.map((option) => (
-                      <ChakraSelect.Item key={option.value} item={option}>
-                        {option.label}
-                      </ChakraSelect.Item>
-                    ))}
-                  </ChakraSelect.Content>
-                </ChakraSelect.Root>
-              </Box>
-
+        {/* Content */}
+        <Box bg="white" borderRadius="12px" p={6}>
+          {/* Filters and Actions */}
+          <HStack justify="space-between" mb={6} flexWrap="wrap" gap={4}>
+            <HStack gap={3} flex="1" flexWrap="wrap">
               {/* Search */}
-              <Box minW="200px" flex="1" maxW="400px">
-                <Input
-                  placeholder="Search"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  size="sm"
-                  bg="white"
-                  borderColor="#D1D5DB"
-                  _hover={{ borderColor: '#9CA3AF' }}
-                  _focus={{ borderColor: '#227CBF', boxShadow: 'none' }}
-                  borderRadius="6px"
-                  height="40px"
-                />
-              </Box>
-            </HStack>
+              <Input
+                placeholder={`Search ${activeTab.toLowerCase()}...`}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                maxW="300px"
+                size="sm"
+                bg="white"
+                borderColor="#D1D5DB"
+                _hover={{ borderColor: '#9CA3AF' }}
+                _focus={{ borderColor: '#227CBF', boxShadow: 'none' }}
+                borderRadius="6px"
+                height="40px"
+              />
 
-            {/* Table */}
-            <Box overflowX="auto">
-              {/* Table Header */}
-              <Box
-                bg="#E2EEFE"
-                borderRadius="8px"
-                px={4}
-                py={3}
-                mb={2}
-                display={{ base: 'none', md: 'block' }}
-              >
-                <HStack>
-                  <Box flex="1">
-                    <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
-                      First Name
-                    </Text>
-                  </Box>
-                  <Box flex="1">
-                    <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
-                      Last Name
-                    </Text>
-                  </Box>
-                  <Box flex="1.5">
-                    <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
-                      Email Address
-                    </Text>
-                  </Box>
-                  <Box flex="1">
-                    <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
-                      Department
-                    </Text>
-                  </Box>
-                  <Box flex="1">
-                    <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
-                      Role
-                    </Text>
-                  </Box>
-                  <Box w="100px" textAlign="center">
-                    <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
-                      Status
-                    </Text>
-                  </Box>
-                  <Box w="100px" textAlign="center">
-                    <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
-                      Actions
-                    </Text>
-                  </Box>
-                </HStack>
-              </Box>
-
-              {/* Table Body - Desktop */}
-              <VStack gap={2} display={{ base: 'none', md: 'flex' }}>
-                {paginatedData.map((item, index) => (
-                  <Box
-                    key={item._id}
-                    bg={index % 2 === 0 ? 'white' : '#F9FAFB'}
-                    borderRadius="8px"
-                    px={4}
-                    py={3}
-                    w="100%"
-                    _hover={{ bg: '#F5F7FA' }}
-                    transition="background 0.2s"
+              {/* Conditional filters */}
+              {activeTab === 'Employees' && (
+                <>
+                  <ChakraSelect.Root
+                    collection={createListCollection({
+                      items: departmentOptions,
+                      itemToString: (item) => item.label,
+                      itemToValue: (item) => item.value,
+                    })}
+                    value={[selectedDepartment]}
+                    onValueChange={(e) => setSelectedDepartment(e.value[0])}
+                    size="sm"
+                    width="180px"
+                    positioning={{ sameWidth: true }}
                   >
-                    <HStack>
-                      <Box flex="1">
-                        <Text fontSize="13px" color="#333">
-                          {item.firstName}
-                        </Text>
-                      </Box>
-                      <Box flex="1">
-                        <Text fontSize="13px" color="#333">
-                          {item.lastName}
-                        </Text>
-                      </Box>
-                      <Box flex="1.5">
-                        <Text fontSize="13px" color="#333">
-                          {item.email}
-                        </Text>
-                      </Box>
-                      <Box flex="1">
-                        <Text fontSize="13px" color="#333">
-                          {item.department}
-                        </Text>
-                      </Box>
-                      <Box flex="1">
-                        <Text fontSize="13px" color="#333">
-                          {item.role}
-                        </Text>
-                      </Box>
-                      <Box w="100px" display="flex" justifyContent="center">
-                        <Box
-                          as="button"
-                          w="40px"
-                          h="22px"
-                          borderRadius="11px"
-                          bg={item.isActive ? '#47B65C' : '#D1D5DB'}
-                          position="relative"
-                          transition="background 0.2s"
-                          onClick={() => handleToggleStatus(item._id)}
-                          cursor="pointer"
-                        >
-                          <Box
-                            w="18px"
-                            h="18px"
-                            borderRadius="50%"
-                            bg="white"
-                            position="absolute"
-                            top="2px"
-                            left={item.isActive ? '20px' : '2px'}
-                            transition="left 0.2s"
-                          />
-                        </Box>
-                      </Box>
-                      <Box w="100px">
-                        <HStack gap={2} justify="center">
-                          <Box
-                            as="button"
-                            cursor="pointer"
-                            onClick={() => handleEdit(item._id)}
-                            _hover={{ opacity: 0.7 }}
-                            transition="opacity 0.2s"
-                          >
-                            <Image src="/edit-icon.png" alt="Edit" w="16px" h="16px" style={{ imageRendering: 'crisp-edges' }} />
-                          </Box>
-                          <Box
-                            as="button"
-                            cursor="pointer"
-                            onClick={() => handleDelete(item._id)}
-                            _hover={{ opacity: 0.7 }}
-                            transition="opacity 0.2s"
-                          >
-                            <Image src="/delete-icon.png" alt="Delete" w="16px" h="16px" style={{ imageRendering: 'crisp-edges' }} />
-                          </Box>
-                        </HStack>
-                      </Box>
-                    </HStack>
-                  </Box>
-                ))}
-              </VStack>
+                    <ChakraSelect.Trigger bg="white" borderColor="#D1D5DB" borderRadius="6px" height="40px">
+                      <ChakraSelect.ValueText placeholder="Department" />
+                    </ChakraSelect.Trigger>
+                    <ChakraSelect.Content
+                      bg="white"
+                      borderRadius="8px"
+                      boxShadow="lg"
+                      zIndex={1500}
+                    >
+                      {departmentOptions.map((option: any) => (
+                        <ChakraSelect.Item key={option.value} item={option}>
+                          {option.label}
+                        </ChakraSelect.Item>
+                      ))}
+                    </ChakraSelect.Content>
+                  </ChakraSelect.Root>
 
-              {/* Table Body - Mobile Cards */}
-              <VStack gap={3} display={{ base: 'flex', md: 'none' }}>
-                {paginatedData.map((item) => (
-                  <Box
-                    key={item._id}
-                    bg="white"
-                    borderRadius="8px"
-                    p={4}
-                    w="100%"
-                    boxShadow="sm"
+                  <ChakraSelect.Root
+                    collection={createListCollection({
+                      items: statusOptions,
+                      itemToString: (item) => item.label,
+                      itemToValue: (item) => item.value,
+                    })}
+                    value={[selectedStatus]}
+                    onValueChange={(e) => setSelectedStatus(e.value[0])}
+                    size="sm"
+                    width="150px"
+                    positioning={{ sameWidth: true }}
                   >
-                    <VStack align="stretch" gap={2}>
-                      <HStack justify="space-between">
-                        <Text fontSize="12px" fontWeight="600" color="#666">
-                          First Name:
-                        </Text>
-                        <Text fontSize="13px" color="#333">
-                          {item.firstName}
-                        </Text>
-                      </HStack>
-                      <HStack justify="space-between">
-                        <Text fontSize="12px" fontWeight="600" color="#666">
-                          Last Name:
-                        </Text>
-                        <Text fontSize="13px" color="#333">
-                          {item.lastName}
-                        </Text>
-                      </HStack>
-                      <HStack justify="space-between">
-                        <Text fontSize="12px" fontWeight="600" color="#666">
-                          Email:
-                        </Text>
-                        <Text fontSize="13px" color="#333">
-                          {item.email}
-                        </Text>
-                      </HStack>
-                      <HStack justify="space-between">
-                        <Text fontSize="12px" fontWeight="600" color="#666">
-                          Department:
-                        </Text>
-                        <Text fontSize="13px" color="#333">
-                          {item.department}
-                        </Text>
-                      </HStack>
-                      <HStack justify="space-between">
-                        <Text fontSize="12px" fontWeight="600" color="#666">
-                          Role:
-                        </Text>
-                        <Text fontSize="13px" color="#333">
-                          {item.role}
-                        </Text>
-                      </HStack>
-                      <HStack justify="space-between">
-                        <Text fontSize="12px" fontWeight="600" color="#666">
-                          Status:
-                        </Text>
-                        <Box
-                          as="button"
-                          w="40px"
-                          h="22px"
-                          borderRadius="11px"
-                          bg={item.isActive ? '#47B65C' : '#D1D5DB'}
-                          position="relative"
-                          transition="background 0.2s"
-                          onClick={() => handleToggleStatus(item._id)}
-                          cursor="pointer"
-                        >
-                          <Box
-                            w="18px"
-                            h="18px"
-                            borderRadius="50%"
-                            bg="white"
-                            position="absolute"
-                            top="2px"
-                            left={item.isActive ? '20px' : '2px'}
-                            transition="left 0.2s"
-                          />
-                        </Box>
-                      </HStack>
-                      <HStack justify="flex-end" gap={3} mt={2}>
-                        <Box
-                          as="button"
-                          cursor="pointer"
-                          onClick={() => handleEdit(item._id)}
-                          _hover={{ opacity: 0.7 }}
-                          transition="opacity 0.2s"
-                        >
-                          <Image src="/edit-icon.png" alt="Edit" w="18px" h="18px" style={{ imageRendering: 'crisp-edges' }} />
-                        </Box>
-                        <Box
-                          as="button"
-                          cursor="pointer"
-                          onClick={() => handleDelete(item._id)}
-                          _hover={{ opacity: 0.7 }}
-                          transition="opacity 0.2s"
-                        >
-                          <Image src="/delete-icon.png" alt="Delete" w="18px" h="18px" style={{ imageRendering: 'crisp-edges' }} />
-                        </Box>
-                      </HStack>
-                    </VStack>
-                  </Box>
-                ))}
-              </VStack>
-            </Box>
+                    <ChakraSelect.Trigger bg="white" borderColor="#D1D5DB" borderRadius="6px" height="40px">
+                      <ChakraSelect.ValueText placeholder="Status" />
+                    </ChakraSelect.Trigger>
+                    <ChakraSelect.Content
+                      bg="white"
+                      borderRadius="8px"
+                      boxShadow="lg"
+                      zIndex={1500}
+                    >
+                      {statusOptions.map((option) => (
+                        <ChakraSelect.Item key={option.value} item={option}>
+                          {option.label}
+                        </ChakraSelect.Item>
+                      ))}
+                    </ChakraSelect.Content>
+                  </ChakraSelect.Root>
+                </>
+              )}
 
-            {/* Pagination */}
-            <HStack justify="space-between" mt={6} flexWrap="wrap" gap={4}>
-              {/* Items per page */}
-              <HStack gap={2}>
-                <Text fontSize="13px" color="#666">
-                  Showing
-                </Text>
+              {activeTab === 'Counterparties' && (
                 <ChakraSelect.Root
-                  collection={itemsPerPageCollection}
+                  collection={createListCollection({
+                    items: sectorOptions,
+                    itemToString: (item) => item.label,
+                    itemToValue: (item) => item.value,
+                  })}
+                  value={[selectedSector]}
+                  onValueChange={(e) => setSelectedSector(e.value[0])}
                   size="sm"
-                  value={[itemsPerPage.toString()]}
-                  onValueChange={(e) => {
-                    setItemsPerPage(Number(e.value[0]));
-                    setCurrentPage(1);
-                  }}
-                  width="80px"
+                  width="180px"
+                  positioning={{ sameWidth: true }}
                 >
-                  <ChakraSelect.Trigger
-                    bg="white"
-                    borderColor="#E6E7EC"
-                    borderRadius="6px"
-                  >
-                    <ChakraSelect.ValueText />
+                  <ChakraSelect.Trigger bg="white" borderColor="#D1D5DB" borderRadius="6px" height="40px">
+                    <ChakraSelect.ValueText placeholder="Sector" />
                   </ChakraSelect.Trigger>
-                  <ChakraSelect.Content bg="white" borderRadius="8px">
-                    {itemsPerPageOptions.map((option) => (
+                  <ChakraSelect.Content
+                    bg="white"
+                    borderRadius="8px"
+                    boxShadow="lg"
+                    zIndex={1500}
+                  >
+                    {sectorOptions.map((option: any) => (
                       <ChakraSelect.Item key={option.value} item={option}>
                         {option.label}
                       </ChakraSelect.Item>
                     ))}
                   </ChakraSelect.Content>
                 </ChakraSelect.Root>
-                <Text fontSize="13px" color="#666">
-                  out of {filteredData.length}
-                </Text>
-              </HStack>
+              )}
+            </HStack>
 
-              {/* Page numbers */}
-              <HStack gap={1}>
-                {/* Previous button */}
-                <Box
-                  as="button"
-                  w="32px"
-                  h="32px"
-                  display="flex"
-                  alignItems="center"
-                  justifyContent="center"
-                  borderRadius="6px"
-                  bg="white"
-                  border="1px solid #E6E7EC"
-                  cursor={currentPage === 1 ? 'not-allowed' : 'pointer'}
-                  opacity={currentPage === 1 ? 0.5 : 1}
-                  onClick={() => currentPage > 1 && setCurrentPage(currentPage - 1)}
-                  _hover={{
-                    bg: currentPage === 1 ? 'white' : '#F5F5F5',
-                  }}
-                >
-                  <Text fontSize="18px">&lt;</Text>
+            {/* Add Button */}
+            {activeTab !== 'Activity log' && activeTab !== 'Audit Trail' && (
+              <Button
+                bg="#227CBF"
+                color="white"
+                fontSize="14px"
+                fontWeight="500"
+                px={6}
+                h="40px"
+                borderRadius="6px"
+                _hover={{ bg: '#1B6AA3' }}
+                onClick={() => {
+                  if (activeTab === 'Employees') setShowAddUserModal(true);
+                  else if (activeTab === 'Departments') setShowAddDepartmentModal(true);
+                  else if (activeTab === 'Counterparties') setShowAddCounterpartyModal(true);
+                  else if (activeTab === 'Sectors') setShowAddSectorModal(true);
+                }}
+              >
+                + Add {activeTab === 'Employees' ? 'User' : activeTab.slice(0, -1)}
+              </Button>
+            )}
+          </HStack>
+
+          {/* Table */}
+          <Box overflowX="auto">
+            {isLoading ? (
+              <Box textAlign="center" py={8}>
+                <Text color="#666">Loading...</Text>
+              </Box>
+            ) : paginatedData.length === 0 ? (
+              <Box textAlign="center" py={8}>
+                <Text color="#666">No {activeTab.toLowerCase()} found</Text>
+              </Box>
+            ) : (
+              <>
+                {/* Table Header */}
+                <Box bg="#E2EEFE" borderRadius="8px" px={4} py={3} mb={2} display={{ base: 'none', md: 'block' }}>
+                  <HStack>
+                    <Box w="60px">
+                      <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
+                        S/N
+                      </Text>
+                    </Box>
+                    {activeTab === 'Employees' && (
+                      <>
+                        <Box flex="1">
+                          <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
+                            Name
+                          </Text>
+                        </Box>
+                        <Box flex="1">
+                          <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
+                            Email
+                          </Text>
+                        </Box>
+                        <Box flex="1">
+                          <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
+                            Department
+                          </Text>
+                        </Box>
+                        <Box w="100px" textAlign="center">
+                          <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
+                            Status
+                          </Text>
+                        </Box>
+                        <Box w="180px" textAlign="center">
+                          <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
+                            Actions
+                          </Text>
+                        </Box>
+                      </>
+                    )}
+                    {(activeTab === 'Departments' || activeTab === 'Sectors') && (
+                      <>
+                        <Box flex="1">
+                          <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
+                            Name
+                          </Text>
+                        </Box>
+                        <Box flex="2">
+                          <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
+                            Description
+                          </Text>
+                        </Box>
+                        <Box w="180px" textAlign="center">
+                          <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
+                            Actions
+                          </Text>
+                        </Box>
+                      </>
+                    )}
+                    {activeTab === 'Counterparties' && (
+                      <>
+                        <Box flex="1">
+                          <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
+                            Name
+                          </Text>
+                        </Box>
+                        <Box flex="1">
+                          <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
+                            Sector
+                          </Text>
+                        </Box>
+                        <Box w="100px" textAlign="center">
+                          <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
+                            Conflicts
+                          </Text>
+                        </Box>
+                        <Box w="180px" textAlign="center">
+                          <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
+                            Actions
+                          </Text>
+                        </Box>
+                      </>
+                    )}
+                    {activeTab === 'Activity log' && (
+                      <>
+                        <Box flex="1">
+                          <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
+                            Initiator
+                          </Text>
+                        </Box>
+                        <Box flex="2">
+                          <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
+                            Action
+                          </Text>
+                        </Box>
+                        <Box flex="1">
+                          <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
+                            Date/Time
+                          </Text>
+                        </Box>
+                      </>
+                    )}
+                    {activeTab === 'Audit Trail' && (
+                      <>
+                        <Box flex="1">
+                          <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
+                            User
+                          </Text>
+                        </Box>
+                        <Box flex="1">
+                          <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
+                            Action
+                          </Text>
+                        </Box>
+                        <Box flex="1">
+                          <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
+                            Resource
+                          </Text>
+                        </Box>
+                        <Box w="100px" textAlign="center">
+                          <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
+                            Status
+                          </Text>
+                        </Box>
+                        <Box flex="1">
+                          <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
+                            Date/Time
+                          </Text>
+                        </Box>
+                      </>
+                    )}
+                  </HStack>
                 </Box>
 
-                {/* Page numbers */}
-                {renderPageNumbers.map((page, index) => (
-                  <Box
-                    key={index}
-                    as="button"
+                {/* Table Body */}
+                <VStack gap={2} align="stretch">
+                  {paginatedData.map((item: any, index) => (
+                    <Box
+                      key={item.id || item._id || index}
+                      bg={index % 2 === 0 ? 'white' : '#F9FAFB'}
+                      borderRadius="8px"
+                      px={4}
+                      py={3}
+                      _hover={{ bg: '#F5F7FA' }}
+                      transition="background 0.2s"
+                    >
+                      <HStack display={{ base: 'none', md: 'flex' }}>
+                        <Box w="60px">
+                          <Text fontSize="13px" color="#333">
+                            {startIndex + index + 1}
+                          </Text>
+                        </Box>
+
+                        {activeTab === 'Employees' && (
+                          <>
+                            <Box flex="1">
+                              <Text fontSize="13px" color="#333">
+                                {item.firstName} {item.lastName}
+                              </Text>
+                            </Box>
+                            <Box flex="1">
+                              <Text fontSize="13px" color="#333">
+                                {item.email}
+                              </Text>
+                            </Box>
+                            <Box flex="1">
+                              <Text fontSize="13px" color="#333">
+                                {item.department?.name || 'N/A'}
+                              </Text>
+                            </Box>
+                            <Box w="100px" textAlign="center">
+                              <Box
+                                as="span"
+                                px={3}
+                                py={1}
+                                borderRadius="12px"
+                                bg={item.status === 1 ? '#E8F5E9' : '#FFEBEE'}
+                                color={item.status === 1 ? '#2E7D32' : '#C62828'}
+                                fontSize="12px"
+                                fontWeight="500"
+                              >
+                                {item.status === 1 ? 'Active' : 'Inactive'}
+                              </Box>
+                            </Box>
+                            <Box w="180px" textAlign="center">
+                              <HStack justify="center" gap={2}>
+                                <ChakraButton
+                                  size="sm"
+                                  bg="#FFA726"
+                                  color="white"
+                                  fontSize="12px"
+                                  px={3}
+                                  h="32px"
+                                  borderRadius="6px"
+                                  _hover={{ bg: '#FB8C00' }}
+                                  onClick={() => handleEditUser(item)}
+                                >
+                                  Edit
+                                </ChakraButton>
+                                <ChakraButton
+                                  size="sm"
+                                  bg={item.status === 1 ? '#EF5350' : '#66BB6A'}
+                                  color="white"
+                                  fontSize="12px"
+                                  px={3}
+                                  h="32px"
+                                  borderRadius="6px"
+                                  _hover={{ bg: item.status === 1 ? '#E53935' : '#4CAF50' }}
+                                  onClick={() => handleToggleUserStatus(item.id, item.status)}
+                                >
+                                  {item.status === 1 ? 'Deactivate' : 'Activate'}
+                                </ChakraButton>
+                                <ChakraButton
+                                  size="sm"
+                                  bg="#EF5350"
+                                  color="white"
+                                  fontSize="12px"
+                                  px={3}
+                                  h="32px"
+                                  borderRadius="6px"
+                                  _hover={{ bg: '#E53935' }}
+                                  onClick={() => handleDeleteUser(item.id)}
+                                >
+                                  Delete
+                                </ChakraButton>
+                              </HStack>
+                            </Box>
+                          </>
+                        )}
+
+                        {(activeTab === 'Departments' || activeTab === 'Sectors') && (
+                          <>
+                            <Box flex="1">
+                              <Text fontSize="13px" color="#333">
+                                {item.name}
+                              </Text>
+                            </Box>
+                            <Box flex="2">
+                              <Text fontSize="13px" color="#333">
+                                {item.description || 'N/A'}
+                              </Text>
+                            </Box>
+                            <Box w="180px" textAlign="center">
+                              <HStack justify="center" gap={2}>
+                                <ChakraButton
+                                  size="sm"
+                                  bg="#FFA726"
+                                  color="white"
+                                  fontSize="12px"
+                                  px={4}
+                                  h="32px"
+                                  borderRadius="6px"
+                                  _hover={{ bg: '#FB8C00' }}
+                                  onClick={() =>
+                                    activeTab === 'Departments'
+                                      ? handleEditDepartment(item)
+                                      : handleEditSector(item)
+                                  }
+                                >
+                                  Edit
+                                </ChakraButton>
+                                <ChakraButton
+                                  size="sm"
+                                  bg="#EF5350"
+                                  color="white"
+                                  fontSize="12px"
+                                  px={4}
+                                  h="32px"
+                                  borderRadius="6px"
+                                  _hover={{ bg: '#E53935' }}
+                                  onClick={() =>
+                                    activeTab === 'Departments'
+                                      ? handleDeleteDepartment(item.id)
+                                      : handleDeleteSector(item.id)
+                                  }
+                                >
+                                  Delete
+                                </ChakraButton>
+                              </HStack>
+                            </Box>
+                          </>
+                        )}
+
+                        {activeTab === 'Counterparties' && (
+                          <>
+                            <Box flex="1">
+                              <Text fontSize="13px" color="#333">
+                                {item.name}
+                              </Text>
+                            </Box>
+                            <Box flex="1">
+                              <Text fontSize="13px" color="#333">
+                                {item.sectorName || 'N/A'}
+                              </Text>
+                            </Box>
+                            <Box w="100px" textAlign="center">
+                              <Text fontSize="13px" color="#333">
+                                {item.conflictCount || 0}
+                              </Text>
+                            </Box>
+                            <Box w="180px" textAlign="center">
+                              <HStack justify="center" gap={2}>
+                                <ChakraButton
+                                  size="sm"
+                                  bg="#FFA726"
+                                  color="white"
+                                  fontSize="12px"
+                                  px={4}
+                                  h="32px"
+                                  borderRadius="6px"
+                                  _hover={{ bg: '#FB8C00' }}
+                                  onClick={() => handleEditCounterparty(item)}
+                                >
+                                  Edit
+                                </ChakraButton>
+                                <ChakraButton
+                                  size="sm"
+                                  bg="#EF5350"
+                                  color="white"
+                                  fontSize="12px"
+                                  px={4}
+                                  h="32px"
+                                  borderRadius="6px"
+                                  _hover={{ bg: '#E53935' }}
+                                  onClick={() => handleDeleteCounterparty(item.id)}
+                                >
+                                  Delete
+                                </ChakraButton>
+                              </HStack>
+                            </Box>
+                          </>
+                        )}
+
+                        {activeTab === 'Activity log' && (
+                          <>
+                            <Box flex="1">
+                              <Text fontSize="13px" color="#333">
+                                {item.initiator || 'N/A'}
+                              </Text>
+                            </Box>
+                            <Box flex="2">
+                              <Text fontSize="13px" color="#333">
+                                {item.action || item.details || 'N/A'}
+                              </Text>
+                            </Box>
+                            <Box flex="1">
+                              <Text fontSize="13px" color="#333">
+                                {item.createdAt
+                                  ? new Date(item.createdAt).toLocaleString('en-US', {
+                                      day: 'numeric',
+                                      month: 'short',
+                                      year: 'numeric',
+                                      hour: 'numeric',
+                                      minute: '2-digit',
+                                      hour12: true,
+                                    })
+                                  : 'N/A'}
+                              </Text>
+                            </Box>
+                          </>
+                        )}
+
+                        {activeTab === 'Audit Trail' && (
+                          <>
+                            <Box flex="1">
+                              <Text fontSize="13px" color="#333">
+                                {item.name || item.userEmail || 'N/A'}
+                              </Text>
+                            </Box>
+                            <Box flex="1">
+                              <Text fontSize="13px" color="#333">
+                                {item.action || 'N/A'}
+                              </Text>
+                            </Box>
+                            <Box flex="1">
+                              <Text fontSize="13px" color="#333">
+                                {item.resource || 'N/A'}
+                              </Text>
+                            </Box>
+                            <Box w="100px" textAlign="center">
+                              <Box
+                                as="span"
+                                px={3}
+                                py={1}
+                                borderRadius="12px"
+                                bg={item.success ? '#E8F5E9' : '#FFEBEE'}
+                                color={item.success ? '#2E7D32' : '#C62828'}
+                                fontSize="12px"
+                                fontWeight="500"
+                              >
+                                {item.success ? 'Success' : 'Failed'}
+                              </Box>
+                            </Box>
+                            <Box flex="1">
+                              <Text fontSize="13px" color="#333">
+                                {item.createdAt
+                                  ? new Date(item.createdAt).toLocaleString('en-US', {
+                                      day: 'numeric',
+                                      month: 'short',
+                                      year: 'numeric',
+                                      hour: 'numeric',
+                                      minute: '2-digit',
+                                      hour12: true,
+                                    })
+                                  : 'N/A'}
+                              </Text>
+                            </Box>
+                          </>
+                        )}
+                      </HStack>
+
+                      {/* Mobile view */}
+                      <VStack align="stretch" gap={2} display={{ base: 'flex', md: 'none' }}>
+                        <Text fontSize="12px" fontWeight="600" color="#666">
+                          #{startIndex + index + 1}
+                        </Text>
+                        {activeTab === 'Employees' && (
+                          <>
+                            <Text fontSize="14px" fontWeight="600" color="#333">
+                              {item.firstName} {item.lastName}
+                            </Text>
+                            <Text fontSize="13px" color="#666">
+                              {item.email}
+                            </Text>
+                            <Text fontSize="13px" color="#666">
+                              Dept: {item.department?.name || 'N/A'}
+                            </Text>
+                            <HStack gap={2}>
+                              <Box
+                                as="span"
+                                px={3}
+                                py={1}
+                                borderRadius="12px"
+                                bg={item.status === 1 ? '#E8F5E9' : '#FFEBEE'}
+                                color={item.status === 1 ? '#2E7D32' : '#C62828'}
+                                fontSize="12px"
+                                fontWeight="500"
+                              >
+                                {item.status === 1 ? 'Active' : 'Inactive'}
+                              </Box>
+                            </HStack>
+                            <HStack gap={2} mt={2}>
+                              <ChakraButton
+                                size="sm"
+                                bg="#FFA726"
+                                color="white"
+                                fontSize="12px"
+                                flex="1"
+                                h="36px"
+                                borderRadius="6px"
+                                _hover={{ bg: '#FB8C00' }}
+                                onClick={() => handleEditUser(item)}
+                              >
+                                Edit
+                              </ChakraButton>
+                              <ChakraButton
+                                size="sm"
+                                bg={item.status === 1 ? '#EF5350' : '#66BB6A'}
+                                color="white"
+                                fontSize="12px"
+                                flex="1"
+                                h="36px"
+                                borderRadius="6px"
+                                _hover={{ bg: item.status === 1 ? '#E53935' : '#4CAF50' }}
+                                onClick={() => handleToggleUserStatus(item.id, item.status)}
+                              >
+                                {item.status === 1 ? 'Deactivate' : 'Activate'}
+                              </ChakraButton>
+                              <ChakraButton
+                                size="sm"
+                                bg="#EF5350"
+                                color="white"
+                                fontSize="12px"
+                                flex="1"
+                                h="36px"
+                                borderRadius="6px"
+                                _hover={{ bg: '#E53935' }}
+                                onClick={() => handleDeleteUser(item.id)}
+                              >
+                                Delete
+                              </ChakraButton>
+                            </HStack>
+                          </>
+                        )}
+                        {/* Add mobile views for other tabs similarly */}
+                      </VStack>
+                    </Box>
+                  ))}
+                </VStack>
+              </>
+            )}
+          </Box>
+
+          {/* Pagination */}
+          <HStack justify="space-between" mt={6} flexWrap="wrap" gap={4}>
+            <HStack gap={2}>
+              <Text fontSize="13px" color="#666">
+                Showing
+              </Text>
+              <ChakraSelect.Root
+                collection={createListCollection({ items: itemsPerPageOptions })}
+                value={[itemsPerPage.toString()]}
+                onValueChange={(e) => {
+                  setItemsPerPage(Number(e.value[0]));
+                  setCurrentPage(1);
+                }}
+                size="sm"
+                width="80px"
+              >
+                <ChakraSelect.Trigger bg="white" borderColor="#E6E7EC" borderRadius="6px">
+                  <ChakraSelect.ValueText />
+                </ChakraSelect.Trigger>
+                <ChakraSelect.Content bg="white" borderRadius="8px">
+                  {itemsPerPageOptions.map((option) => (
+                    <ChakraSelect.Item key={option.value} item={option}>
+                      {option.label}
+                    </ChakraSelect.Item>
+                  ))}
+                </ChakraSelect.Content>
+              </ChakraSelect.Root>
+              <Text fontSize="13px" color="#666">
+                out of {actualTotalRecords}
+              </Text>
+            </HStack>
+
+            <HStack gap={1}>
+              <ChakraButton
+                size="sm"
+                minW="32px"
+                h="32px"
+                bg="white"
+                border="1px solid #E6E7EC"
+                borderRadius="6px"
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                _hover={{ bg: currentPage === 1 ? 'white' : '#F5F5F5' }}
+                opacity={currentPage === 1 ? 0.5 : 1}
+              >
+                <FiChevronLeft />
+              </ChakraButton>
+
+              {renderPageNumbers.map((page, index) =>
+                page === '...' ? (
+                  <Text key={`ellipsis-${index}`} px={2} color="#666">
+                    ...
+                  </Text>
+                ) : (
+                  <ChakraButton
+                    key={page}
+                    size="sm"
                     minW="32px"
                     h="32px"
-                    px={2}
-                    display="flex"
-                    alignItems="center"
-                    justifyContent="center"
-                    borderRadius="6px"
-                    bg={page === currentPage ? '#227CBF' : 'white'}
-                    color={page === currentPage ? 'white' : '#333'}
+                    bg={currentPage === page ? '#227CBF' : 'white'}
+                    color={currentPage === page ? 'white' : '#333'}
                     border="1px solid"
-                    borderColor={page === currentPage ? '#227CBF' : '#E6E7EC'}
-                    cursor={page === '...' ? 'default' : 'pointer'}
-                    fontSize="13px"
-                    fontWeight={page === currentPage ? '600' : '400'}
-                    onClick={() =>
-                      typeof page === 'number' && setCurrentPage(page)
-                    }
-                    _hover={{
-                      bg: page === '...' ? 'white' : page === currentPage ? '#227CBF' : '#F5F5F5',
-                    }}
+                    borderColor={currentPage === page ? '#227CBF' : '#E6E7EC'}
+                    borderRadius="6px"
+                    onClick={() => setCurrentPage(page as number)}
+                    _hover={{ bg: currentPage === page ? '#227CBF' : '#F5F5F5' }}
                   >
                     {page}
-                  </Box>
-                ))}
+                  </ChakraButton>
+                )
+              )}
 
-                {/* Next button */}
-                <Box
-                  as="button"
-                  w="32px"
-                  h="32px"
-                  display="flex"
-                  alignItems="center"
-                  justifyContent="center"
-                  borderRadius="6px"
-                  bg="white"
-                  border="1px solid #E6E7EC"
-                  cursor={currentPage === totalPages ? 'not-allowed' : 'pointer'}
-                  opacity={currentPage === totalPages ? 0.5 : 1}
-                  onClick={() =>
-                    currentPage < totalPages && setCurrentPage(currentPage + 1)
-                  }
-                  _hover={{
-                    bg: currentPage === totalPages ? 'white' : '#F5F5F5',
-                  }}
-                >
-                  <Text fontSize="18px">&gt;</Text>
-                </Box>
-              </HStack>
+              <ChakraButton
+                size="sm"
+                minW="32px"
+                h="32px"
+                bg="white"
+                border="1px solid #E6E7EC"
+                borderRadius="6px"
+                disabled={currentPage === actualTotalPages}
+                onClick={() => setCurrentPage((p) => Math.min(actualTotalPages, p + 1))}
+                _hover={{ bg: currentPage === actualTotalPages ? 'white' : '#F5F5F5' }}
+                opacity={currentPage === actualTotalPages ? 0.5 : 1}
+              >
+                <FiChevronRight />
+              </ChakraButton>
             </HStack>
+          </HStack>
+        </Box>
+
+        {/* Add/Edit User Modal */}
+        {(showAddUserModal || showEditUserModal) && (
+          <Box
+            position="fixed"
+            top="0"
+            left="0"
+            right="0"
+            bottom="0"
+            bg="rgba(0, 0, 0, 0.5)"
+            display="flex"
+            alignItems="center"
+            justifyContent="center"
+            zIndex="1000"
+            onClick={() => {
+              setShowAddUserModal(false);
+              setShowEditUserModal(false);
+              setUserToEdit(null);
+              setNewUser({ firstName: '', lastName: '', email: '', departmentId: '', role: 1 });
+            }}
+          >
+            <Box
+              bg="white"
+              borderRadius="12px"
+              p={6}
+              maxW="500px"
+              w="90%"
+              boxShadow="xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Text fontSize="18px" fontWeight="600" mb={4}>
+                {showEditUserModal ? 'Edit User' : 'Add New User'}
+              </Text>
+              <VStack gap={4} align="stretch">
+                <Box>
+                  <Text fontSize="13px" fontWeight="500" mb={1}>
+                    First Name*
+                  </Text>
+                  <Input
+                    value={newUser.firstName}
+                    onChange={(e) => setNewUser({ ...newUser, firstName: e.target.value })}
+                    placeholder="Enter first name"
+                  />
+                </Box>
+                <Box>
+                  <Text fontSize="13px" fontWeight="500" mb={1}>
+                    Last Name*
+                  </Text>
+                  <Input
+                    value={newUser.lastName}
+                    onChange={(e) => setNewUser({ ...newUser, lastName: e.target.value })}
+                    placeholder="Enter last name"
+                  />
+                </Box>
+                <Box>
+                  <Text fontSize="13px" fontWeight="500" mb={1}>
+                    Email*
+                  </Text>
+                  <Input
+                    type="email"
+                    value={newUser.email}
+                    onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+                    placeholder="Enter email"
+                  />
+                </Box>
+                <Box>
+                  <Text fontSize="13px" fontWeight="500" mb={1}>
+                    Department*
+                  </Text>
+                  <ChakraSelect.Root
+                    collection={createListCollection({
+                      items: allDepartmentsData?.data?.result?.map((dept: any) => ({
+                        label: dept.name,
+                        value: dept.id,
+                      })) || [],
+                    })}
+                    value={[newUser.departmentId]}
+                    onValueChange={(e) => setNewUser({ ...newUser, departmentId: e.value[0] })}
+                  >
+                    <ChakraSelect.Trigger bg="white" borderColor="#D1D5DB" borderRadius="6px">
+                      <ChakraSelect.ValueText placeholder="Select department" />
+                    </ChakraSelect.Trigger>
+                    <ChakraSelect.Content bg="white" borderRadius="8px" boxShadow="lg" zIndex={1500}>
+                      {allDepartmentsData?.data?.result?.map((dept: any) => (
+                        <ChakraSelect.Item key={dept.id} item={{ label: dept.name, value: dept.id }}>
+                          {dept.name}
+                        </ChakraSelect.Item>
+                      ))}
+                    </ChakraSelect.Content>
+                  </ChakraSelect.Root>
+                </Box>
+                <HStack gap={3} mt={4}>
+                  <Button
+                    flex="1"
+                    bg="#E0E0E0"
+                    color="#666"
+                    _hover={{ bg: '#D0D0D0' }}
+                    onClick={() => {
+                      setShowAddUserModal(false);
+                      setShowEditUserModal(false);
+                      setUserToEdit(null);
+                      setNewUser({ firstName: '', lastName: '', email: '', departmentId: '', role: 1 });
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    flex="1"
+                    bg="#227CBF"
+                    color="white"
+                    _hover={{ bg: '#1B6AA3' }}
+                    onClick={showEditUserModal ? handleUpdateUser : handleAddUser}
+                    disabled={isCreatingUser || isUpdatingUser}
+                  >
+                    {isCreatingUser || isUpdatingUser ? 'Saving...' : showEditUserModal ? 'Update' : 'Create'}
+                  </Button>
+                </HStack>
+              </VStack>
+            </Box>
           </Box>
         )}
 
-        {/* Roles Tab */}
-        {activeTab === 'Roles' && (
-          <Box bg="white" borderRadius="12px" p={6}>
-            {/* Search */}
-            <HStack gap={3} mb={6} flexWrap="wrap" align="center">
-              <Box minW="200px" flex="1" maxW="400px">
-                <Input
-                  placeholder="Search"
-                  value={rolesSearchQuery}
-                  onChange={(e) => setRolesSearchQuery(e.target.value)}
-                  size="sm"
-                  bg="white"
-                  borderColor="#D1D5DB"
-                  _hover={{ borderColor: '#9CA3AF' }}
-                  _focus={{ borderColor: '#227CBF', boxShadow: 'none' }}
-                  borderRadius="6px"
-                  height="40px"
-                />
-              </Box>
-            </HStack>
-
-            {/* Table */}
-            <Box overflowX="auto">
-              {/* Table Header */}
-              <Box
-                bg="#E2EEFE"
-                borderRadius="8px"
-                px={4}
-                py={3}
-                mb={2}
-                display={{ base: 'none', md: 'block' }}
-              >
-                <HStack>
-                  <Box flex="1">
-                    <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
-                      Role
-                    </Text>
-                  </Box>
-                  <Box flex="2" display="flex" justifyContent="center" pr={20}>
-                    <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
-                      Role Description
-                    </Text>
-                  </Box>
-                  <Box w="100px" textAlign="center">
-                    <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
-                      Actions
-                    </Text>
-                  </Box>
-                </HStack>
-              </Box>
-
-              {/* Table Body - Desktop */}
-              <VStack gap={2} display={{ base: 'none', md: 'flex' }}>
-                {paginatedRoles.map((item, index) => (
-                  <Box
-                    key={item._id}
-                    bg={index % 2 === 0 ? 'white' : '#F9FAFB'}
-                    borderRadius="8px"
-                    px={4}
-                    py={3}
-                    w="100%"
-                    _hover={{ bg: '#F5F7FA' }}
-                    transition="background 0.2s"
-                  >
-                    <HStack>
-                      <Box flex="1">
-                        <Text fontSize="13px" color="#333">
-                          {item.name}
-                        </Text>
-                      </Box>
-                      <Box flex="2" display="flex" justifyContent="center" pr={20}>
-                        <Text fontSize="13px" color="#333">
-                          {item.description}
-                        </Text>
-                      </Box>
-                      <Box w="100px">
-                        <HStack gap={2} justify="center">
-                          <Box
-                            as="button"
-                            cursor="pointer"
-                            onClick={() => handleEditRole(item._id)}
-                            _hover={{ opacity: 0.7 }}
-                            transition="opacity 0.2s"
-                          >
-                            <Image src="/edit-icon.png" alt="Edit" w="16px" h="16px" style={{ imageRendering: 'crisp-edges' }} />
-                          </Box>
-                          <Box
-                            as="button"
-                            cursor="pointer"
-                            onClick={() => handleDeleteRole(item._id)}
-                            _hover={{ opacity: 0.7 }}
-                            transition="opacity 0.2s"
-                          >
-                            <Image src="/delete-icon.png" alt="Delete" w="16px" h="16px" style={{ imageRendering: 'crisp-edges' }} />
-                          </Box>
-                        </HStack>
-                      </Box>
-                    </HStack>
-                  </Box>
-                ))}
-              </VStack>
-
-              {/* Table Body - Mobile Cards */}
-              <VStack gap={3} display={{ base: 'flex', md: 'none' }}>
-                {paginatedRoles.map((item) => (
-                  <Box
-                    key={item._id}
-                    bg="white"
-                    borderRadius="8px"
-                    p={4}
-                    w="100%"
-                    boxShadow="sm"
-                  >
-                    <VStack align="stretch" gap={2}>
-                      <HStack justify="space-between">
-                        <Text fontSize="12px" fontWeight="600" color="#666">
-                          Role:
-                        </Text>
-                        <Text fontSize="13px" color="#333">
-                          {item.name}
-                        </Text>
-                      </HStack>
-                      <HStack justify="space-between">
-                        <Text fontSize="12px" fontWeight="600" color="#666">
-                          Description:
-                        </Text>
-                        <Text fontSize="13px" color="#333">
-                          {item.description}
-                        </Text>
-                      </HStack>
-                      <HStack justify="flex-end" gap={3} mt={2}>
-                        <Box
-                          as="button"
-                          cursor="pointer"
-                          onClick={() => handleEditRole(item._id)}
-                          _hover={{ opacity: 0.7 }}
-                          transition="opacity 0.2s"
-                        >
-                          <Image src="/edit-icon.png" alt="Edit" w="18px" h="18px" style={{ imageRendering: 'crisp-edges' }} />
-                        </Box>
-                        <Box
-                          as="button"
-                          cursor="pointer"
-                          onClick={() => handleDeleteRole(item._id)}
-                          _hover={{ opacity: 0.7 }}
-                          transition="opacity 0.2s"
-                        >
-                          <Image src="/delete-icon.png" alt="Delete" w="18px" h="18px" style={{ imageRendering: 'crisp-edges' }} />
-                        </Box>
-                      </HStack>
-                    </VStack>
-                  </Box>
-                ))}
-              </VStack>
-            </Box>
-
-            {/* Pagination */}
-            <HStack justify="space-between" mt={6} flexWrap="wrap" gap={4}>
-              {/* Items per page */}
-              <HStack gap={2}>
-                <Text fontSize="13px" color="#666">
-                  Showing
-                </Text>
-                <ChakraSelect.Root
-                  collection={itemsPerPageCollection}
-                  size="sm"
-                  value={[rolesItemsPerPage.toString()]}
-                  onValueChange={(e) => {
-                    setRolesItemsPerPage(Number(e.value[0]));
-                    setRolesCurrentPage(1);
-                  }}
-                  width="80px"
-                >
-                  <ChakraSelect.Trigger
-                    bg="white"
-                    borderColor="#E6E7EC"
-                    borderRadius="6px"
-                  >
-                    <ChakraSelect.ValueText />
-                  </ChakraSelect.Trigger>
-                  <ChakraSelect.Content bg="white" borderRadius="8px">
-                    {itemsPerPageOptions.map((option) => (
-                      <ChakraSelect.Item key={option.value} item={option}>
-                        {option.label}
-                      </ChakraSelect.Item>
-                    ))}
-                  </ChakraSelect.Content>
-                </ChakraSelect.Root>
-                <Text fontSize="13px" color="#666">
-                  out of {filteredRoles.length}
-                </Text>
-              </HStack>
-
-              {/* Page numbers */}
-              <HStack gap={1}>
-                {/* Previous button */}
-                <Box
-                  as="button"
-                  w="32px"
-                  h="32px"
-                  display="flex"
-                  alignItems="center"
-                  justifyContent="center"
-                  borderRadius="6px"
-                  bg="white"
-                  border="1px solid #E6E7EC"
-                  cursor={rolesCurrentPage === 1 ? 'not-allowed' : 'pointer'}
-                  opacity={rolesCurrentPage === 1 ? 0.5 : 1}
-                  onClick={() => rolesCurrentPage > 1 && setRolesCurrentPage(rolesCurrentPage - 1)}
-                  _hover={{
-                    bg: rolesCurrentPage === 1 ? 'white' : '#F5F5F5',
-                  }}
-                >
-                  <Text fontSize="18px">&lt;</Text>
+        {/* Add/Edit Department Modal */}
+        {(showAddDepartmentModal || showEditDepartmentModal) && (
+          <Box
+            position="fixed"
+            top="0"
+            left="0"
+            right="0"
+            bottom="0"
+            bg="rgba(0, 0, 0, 0.5)"
+            display="flex"
+            alignItems="center"
+            justifyContent="center"
+            zIndex="1000"
+            onClick={() => {
+              setShowAddDepartmentModal(false);
+              setShowEditDepartmentModal(false);
+              setDepartmentToEdit(null);
+              setNewDepartment({ name: '', description: '', code: '' });
+            }}
+          >
+            <Box
+              bg="white"
+              borderRadius="12px"
+              p={6}
+              maxW="500px"
+              w="90%"
+              boxShadow="xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Text fontSize="18px" fontWeight="600" mb={4}>
+                {showEditDepartmentModal ? 'Edit Department' : 'Add New Department'}
+              </Text>
+              <VStack gap={4} align="stretch">
+                <Box>
+                  <Text fontSize="13px" fontWeight="500" mb={1}>
+                    Name*
+                  </Text>
+                  <Input
+                    value={newDepartment.name}
+                    onChange={(e) => setNewDepartment({ ...newDepartment, name: e.target.value })}
+                    placeholder="Enter department name"
+                  />
                 </Box>
-
-                {/* Page numbers */}
-                {renderRolesPageNumbers.map((page, index) => (
-                  <Box
-                    key={index}
-                    as="button"
-                    minW="32px"
-                    h="32px"
-                    px={2}
-                    display="flex"
-                    alignItems="center"
-                    justifyContent="center"
-                    borderRadius="6px"
-                    bg={page === rolesCurrentPage ? '#227CBF' : 'white'}
-                    color={page === rolesCurrentPage ? 'white' : '#333'}
-                    border="1px solid"
-                    borderColor={page === rolesCurrentPage ? '#227CBF' : '#E6E7EC'}
-                    cursor={page === '...' ? 'default' : 'pointer'}
-                    fontSize="13px"
-                    fontWeight={page === rolesCurrentPage ? '600' : '400'}
-                    onClick={() =>
-                      typeof page === 'number' && setRolesCurrentPage(page)
-                    }
-                    _hover={{
-                      bg: page === '...' ? 'white' : page === rolesCurrentPage ? '#227CBF' : '#F5F5F5',
+                <Box>
+                  <Text fontSize="13px" fontWeight="500" mb={1}>
+                    Code
+                  </Text>
+                  <Input
+                    value={newDepartment.code}
+                    onChange={(e) => setNewDepartment({ ...newDepartment, code: e.target.value })}
+                    placeholder="Enter department code"
+                  />
+                </Box>
+                <Box>
+                  <Text fontSize="13px" fontWeight="500" mb={1}>
+                    Description
+                  </Text>
+                  <Textarea
+                    value={newDepartment.description}
+                    onChange={(e) => setNewDepartment({ ...newDepartment, description: e.target.value })}
+                    placeholder="Enter description"
+                    rows={3}
+                  />
+                </Box>
+                <HStack gap={3} mt={4}>
+                  <Button
+                    flex="1"
+                    bg="#E0E0E0"
+                    color="#666"
+                    _hover={{ bg: '#D0D0D0' }}
+                    onClick={() => {
+                      setShowAddDepartmentModal(false);
+                      setShowEditDepartmentModal(false);
+                      setDepartmentToEdit(null);
+                      setNewDepartment({ name: '', description: '', code: '' });
                     }}
                   >
-                    {page}
-                  </Box>
-                ))}
-
-                {/* Next button */}
-                <Box
-                  as="button"
-                  w="32px"
-                  h="32px"
-                  display="flex"
-                  alignItems="center"
-                  justifyContent="center"
-                  borderRadius="6px"
-                  bg="white"
-                  border="1px solid #E6E7EC"
-                  cursor={rolesCurrentPage === rolesTotalPages ? 'not-allowed' : 'pointer'}
-                  opacity={rolesCurrentPage === rolesTotalPages ? 0.5 : 1}
-                  onClick={() =>
-                    rolesCurrentPage < rolesTotalPages && setRolesCurrentPage(rolesCurrentPage + 1)
-                  }
-                  _hover={{
-                    bg: rolesCurrentPage === rolesTotalPages ? 'white' : '#F5F5F5',
-                  }}
-                >
-                  <Text fontSize="18px">&gt;</Text>
-                </Box>
-              </HStack>
-            </HStack>
+                    Cancel
+                  </Button>
+                  <Button
+                    flex="1"
+                    bg="#227CBF"
+                    color="white"
+                    _hover={{ bg: '#1B6AA3' }}
+                    onClick={showEditDepartmentModal ? handleUpdateDepartment : handleAddDepartment}
+                    disabled={isCreatingDepartment || isUpdatingDepartment}
+                  >
+                    {isCreatingDepartment || isUpdatingDepartment ? 'Saving...' : showEditDepartmentModal ? 'Update' : 'Create'}
+                  </Button>
+                </HStack>
+              </VStack>
+            </Box>
           </Box>
         )}
 
-        {/* Departments Tab */}
-        {activeTab === 'Departments' && (
-          <Box bg="white" borderRadius="12px" p={6}>
-            {/* Search */}
-            <HStack gap={3} mb={6} flexWrap="wrap" align="center">
-              <Box minW="200px" flex="1" maxW="400px">
-                <Input
-                  placeholder="Search"
-                  value={departmentsSearchQuery}
-                  onChange={(e) => setDepartmentsSearchQuery(e.target.value)}
-                  size="sm"
-                  bg="white"
-                  borderColor="#D1D5DB"
-                  _hover={{ borderColor: '#9CA3AF' }}
-                  _focus={{ borderColor: '#227CBF', boxShadow: 'none' }}
-                  borderRadius="6px"
-                  height="40px"
-                />
-              </Box>
-            </HStack>
-
-            {/* Table */}
-            <Box overflowX="auto">
-              {/* Table Header */}
-              <Box
-                bg="#E2EEFE"
-                borderRadius="8px"
-                px={4}
-                py={3}
-                mb={2}
-                display={{ base: 'none', md: 'block' }}
-              >
-                <HStack>
-                  <Box flex="1">
-                    <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
-                      Department
-                    </Text>
-                  </Box>
-                  <Box flex="2" display="flex" justifyContent="center" pr={20}>
-                    <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
-                      Department Description
-                    </Text>
-                  </Box>
-                  <Box w="100px" textAlign="center">
-                    <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
-                      Actions
-                    </Text>
-                  </Box>
-                </HStack>
-              </Box>
-
-              {/* Table Body - Desktop */}
-              <VStack gap={2} display={{ base: 'none', md: 'flex' }}>
-                {paginatedDepartments.map((item, index) => (
-                  <Box
-                    key={item._id}
-                    bg={index % 2 === 0 ? 'white' : '#F9FAFB'}
-                    borderRadius="8px"
-                    px={4}
-                    py={3}
-                    w="100%"
-                    _hover={{ bg: '#F5F7FA' }}
-                    transition="background 0.2s"
-                  >
-                    <HStack>
-                      <Box flex="1">
-                        <Text fontSize="13px" color="#333">
-                          {item.name}
-                        </Text>
-                      </Box>
-                      <Box flex="2" display="flex" justifyContent="center" pr={20}>
-                        <Text fontSize="13px" color="#333">
-                          {item.description}
-                        </Text>
-                      </Box>
-                      <Box w="100px">
-                        <HStack gap={2} justify="center">
-                          <Box
-                            as="button"
-                            cursor="pointer"
-                            onClick={() => handleEditDepartment(item._id)}
-                            _hover={{ opacity: 0.7 }}
-                            transition="opacity 0.2s"
-                          >
-                            <Image src="/edit-icon.png" alt="Edit" w="16px" h="16px" style={{ imageRendering: 'crisp-edges' }} />
-                          </Box>
-                          <Box
-                            as="button"
-                            cursor="pointer"
-                            onClick={() => handleDeleteDepartment(item._id)}
-                            _hover={{ opacity: 0.7 }}
-                            transition="opacity 0.2s"
-                          >
-                            <Image src="/delete-icon.png" alt="Delete" w="16px" h="16px" style={{ imageRendering: 'crisp-edges' }} />
-                          </Box>
-                        </HStack>
-                      </Box>
-                    </HStack>
-                  </Box>
-                ))}
-              </VStack>
-
-              {/* Table Body - Mobile Cards */}
-              <VStack gap={3} display={{ base: 'flex', md: 'none' }}>
-                {paginatedDepartments.map((item) => (
-                  <Box
-                    key={item._id}
-                    bg="white"
-                    borderRadius="8px"
-                    p={4}
-                    w="100%"
-                    boxShadow="sm"
-                  >
-                    <VStack align="stretch" gap={2}>
-                      <HStack justify="space-between">
-                        <Text fontSize="12px" fontWeight="600" color="#666">
-                          Department:
-                        </Text>
-                        <Text fontSize="13px" color="#333">
-                          {item.name}
-                        </Text>
-                      </HStack>
-                      <HStack justify="space-between">
-                        <Text fontSize="12px" fontWeight="600" color="#666">
-                          Description:
-                        </Text>
-                        <Text fontSize="13px" color="#333">
-                          {item.description}
-                        </Text>
-                      </HStack>
-                      <HStack justify="flex-end" gap={3} mt={2}>
-                        <Box
-                          as="button"
-                          cursor="pointer"
-                          onClick={() => handleEditDepartment(item._id)}
-                          _hover={{ opacity: 0.7 }}
-                          transition="opacity 0.2s"
-                        >
-                          <Image src="/edit-icon.png" alt="Edit" w="18px" h="18px" style={{ imageRendering: 'crisp-edges' }} />
-                        </Box>
-                        <Box
-                          as="button"
-                          cursor="pointer"
-                          onClick={() => handleDeleteDepartment(item._id)}
-                          _hover={{ opacity: 0.7 }}
-                          transition="opacity 0.2s"
-                        >
-                          <Image src="/delete-icon.png" alt="Delete" w="18px" h="18px" style={{ imageRendering: 'crisp-edges' }} />
-                        </Box>
-                      </HStack>
-                    </VStack>
-                  </Box>
-                ))}
-              </VStack>
-            </Box>
-
-            {/* Pagination */}
-            <HStack justify="space-between" mt={6} flexWrap="wrap" gap={4}>
-              {/* Items per page */}
-              <HStack gap={2}>
-                <Text fontSize="13px" color="#666">
-                  Showing
-                </Text>
-                <ChakraSelect.Root
-                  collection={itemsPerPageCollection}
-                  size="sm"
-                  value={[departmentsItemsPerPage.toString()]}
-                  onValueChange={(e) => {
-                    setDepartmentsItemsPerPage(Number(e.value[0]));
-                    setDepartmentsCurrentPage(1);
-                  }}
-                  width="80px"
-                >
-                  <ChakraSelect.Trigger
-                    bg="white"
-                    borderColor="#E6E7EC"
-                    borderRadius="6px"
-                  >
-                    <ChakraSelect.ValueText />
-                  </ChakraSelect.Trigger>
-                  <ChakraSelect.Content bg="white" borderRadius="8px">
-                    {itemsPerPageOptions.map((option) => (
-                      <ChakraSelect.Item key={option.value} item={option}>
-                        {option.label}
-                      </ChakraSelect.Item>
-                    ))}
-                  </ChakraSelect.Content>
-                </ChakraSelect.Root>
-                <Text fontSize="13px" color="#666">
-                  out of {filteredDepartments.length}
-                </Text>
-              </HStack>
-
-              {/* Page numbers */}
-              <HStack gap={1}>
-                {/* Previous button */}
-                <Box
-                  as="button"
-                  w="32px"
-                  h="32px"
-                  display="flex"
-                  alignItems="center"
-                  justifyContent="center"
-                  borderRadius="6px"
-                  bg="white"
-                  border="1px solid #E6E7EC"
-                  cursor={departmentsCurrentPage === 1 ? 'not-allowed' : 'pointer'}
-                  opacity={departmentsCurrentPage === 1 ? 0.5 : 1}
-                  onClick={() => departmentsCurrentPage > 1 && setDepartmentsCurrentPage(departmentsCurrentPage - 1)}
-                  _hover={{
-                    bg: departmentsCurrentPage === 1 ? 'white' : '#F5F5F5',
-                  }}
-                >
-                  <Text fontSize="18px">&lt;</Text>
+        {/* Add/Edit Counterparty Modal */}
+        {(showAddCounterpartyModal || showEditCounterpartyModal) && (
+          <Box
+            position="fixed"
+            top="0"
+            left="0"
+            right="0"
+            bottom="0"
+            bg="rgba(0, 0, 0, 0.5)"
+            display="flex"
+            alignItems="center"
+            justifyContent="center"
+            zIndex="1000"
+            onClick={() => {
+              setShowAddCounterpartyModal(false);
+              setShowEditCounterpartyModal(false);
+              setCounterpartyToEdit(null);
+              setNewCounterparty({ name: '', sectorId: '' });
+            }}
+          >
+            <Box
+              bg="white"
+              borderRadius="12px"
+              p={6}
+              maxW="500px"
+              w="90%"
+              boxShadow="xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Text fontSize="18px" fontWeight="600" mb={4}>
+                {showEditCounterpartyModal ? 'Edit Counterparty' : 'Add New Counterparty'}
+              </Text>
+              <VStack gap={4} align="stretch">
+                <Box>
+                  <Text fontSize="13px" fontWeight="500" mb={1}>
+                    Name*
+                  </Text>
+                  <Input
+                    value={newCounterparty.name}
+                    onChange={(e) => setNewCounterparty({ ...newCounterparty, name: e.target.value })}
+                    placeholder="Enter counterparty name"
+                  />
                 </Box>
-
-                {/* Page numbers */}
-                {renderDepartmentsPageNumbers.map((page, index) => (
-                  <Box
-                    key={index}
-                    as="button"
-                    minW="32px"
-                    h="32px"
-                    px={2}
-                    display="flex"
-                    alignItems="center"
-                    justifyContent="center"
-                    borderRadius="6px"
-                    bg={page === departmentsCurrentPage ? '#227CBF' : 'white'}
-                    color={page === departmentsCurrentPage ? 'white' : '#333'}
-                    border="1px solid"
-                    borderColor={page === departmentsCurrentPage ? '#227CBF' : '#E6E7EC'}
-                    cursor={page === '...' ? 'default' : 'pointer'}
-                    fontSize="13px"
-                    fontWeight={page === departmentsCurrentPage ? '600' : '400'}
-                    onClick={() =>
-                      typeof page === 'number' && setDepartmentsCurrentPage(page)
-                    }
-                    _hover={{
-                      bg: page === '...' ? 'white' : page === departmentsCurrentPage ? '#227CBF' : '#F5F5F5',
+                <Box>
+                  <Text fontSize="13px" fontWeight="500" mb={1}>
+                    Sector*
+                  </Text>
+                  <ChakraSelect.Root
+                    collection={createListCollection({ items: sectorOptionsForCreate })}
+                    value={[newCounterparty.sectorId]}
+                    onValueChange={(e) => setNewCounterparty({ ...newCounterparty, sectorId: e.value[0] })}
+                  >
+                    <ChakraSelect.Trigger bg="white" borderColor="#D1D5DB" borderRadius="6px">
+                      <ChakraSelect.ValueText placeholder="Select sector" />
+                    </ChakraSelect.Trigger>
+                    <ChakraSelect.Content bg="white" borderRadius="8px" boxShadow="lg">
+                      {sectorOptionsForCreate.map((option: any) => (
+                        <ChakraSelect.Item key={option.value} item={option}>
+                          {option.label}
+                        </ChakraSelect.Item>
+                      ))}
+                    </ChakraSelect.Content>
+                  </ChakraSelect.Root>
+                </Box>
+                <HStack gap={3} mt={4}>
+                  <Button
+                    flex="1"
+                    bg="#E0E0E0"
+                    color="#666"
+                    _hover={{ bg: '#D0D0D0' }}
+                    onClick={() => {
+                      setShowAddCounterpartyModal(false);
+                      setShowEditCounterpartyModal(false);
+                      setCounterpartyToEdit(null);
+                      setNewCounterparty({ name: '', sectorId: '' });
                     }}
                   >
-                    {page}
-                  </Box>
-                ))}
-
-                {/* Next button */}
-                <Box
-                  as="button"
-                  w="32px"
-                  h="32px"
-                  display="flex"
-                  alignItems="center"
-                  justifyContent="center"
-                  borderRadius="6px"
-                  bg="white"
-                  border="1px solid #E6E7EC"
-                  cursor={departmentsCurrentPage === departmentsTotalPages ? 'not-allowed' : 'pointer'}
-                  opacity={departmentsCurrentPage === departmentsTotalPages ? 0.5 : 1}
-                  onClick={() =>
-                    departmentsCurrentPage < departmentsTotalPages && setDepartmentsCurrentPage(departmentsCurrentPage + 1)
-                  }
-                  _hover={{
-                    bg: departmentsCurrentPage === departmentsTotalPages ? 'white' : '#F5F5F5',
-                  }}
-                >
-                  <Text fontSize="18px">&gt;</Text>
-                </Box>
-              </HStack>
-            </HStack>
+                    Cancel
+                  </Button>
+                  <Button
+                    flex="1"
+                    bg="#227CBF"
+                    color="white"
+                    _hover={{ bg: '#1B6AA3' }}
+                    onClick={showEditCounterpartyModal ? handleUpdateCounterparty : handleAddCounterparty}
+                    disabled={isCreatingCounterparty || isUpdatingCounterparty}
+                  >
+                    {isCreatingCounterparty || isUpdatingCounterparty ? 'Saving...' : showEditCounterpartyModal ? 'Update' : 'Create'}
+                  </Button>
+                </HStack>
+              </VStack>
+            </Box>
           </Box>
         )}
 
-        {/* Counterparties Tab */}
-        {activeTab === 'Counterparties' && (
-          <Box bg="white" borderRadius="12px" p={6}>
-            {/* Search */}
-            <HStack gap={3} mb={6} flexWrap="wrap" align="center">
-              <Box minW="200px" flex="1" maxW="400px">
-                <Input
-                  placeholder="Search"
-                  value={counterpartiesSearchQuery}
-                  onChange={(e) => setCounterpartiesSearchQuery(e.target.value)}
-                  size="sm"
-                  bg="white"
-                  borderColor="#D1D5DB"
-                  _hover={{ borderColor: '#9CA3AF' }}
-                  _focus={{ borderColor: '#227CBF', boxShadow: 'none' }}
-                  borderRadius="6px"
-                  height="40px"
-                />
-              </Box>
-            </HStack>
-
-            {/* Table */}
-            <Box overflowX="auto">
-              {/* Table Header */}
-              <Box
-                bg="#E2EEFE"
-                borderRadius="8px"
-                px={4}
-                py={3}
-                mb={2}
-                display={{ base: 'none', md: 'block' }}
-              >
-                <HStack>
-                  <Box flex="1">
-                    <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
-                      Counterparty
-                    </Text>
-                  </Box>
-                  <Box flex="2" display="flex" justifyContent="center">
-                    <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
-                      Counterparty Description
-                    </Text>
-                  </Box>
-                  <Box flex="1" display="flex" justifyContent="center">
-                    <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
-                      Sector
-                    </Text>
-                  </Box>
-                  <Box w="100px" textAlign="center">
-                    <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
-                      Actions
-                    </Text>
-                  </Box>
-                </HStack>
-              </Box>
-
-              {/* Table Body - Desktop */}
-              <VStack gap={2} display={{ base: 'none', md: 'flex' }}>
-                {paginatedCounterparties.map((item, index) => (
-                  <Box
-                    key={item._id}
-                    bg={index % 2 === 0 ? 'white' : '#F9FAFB'}
-                    borderRadius="8px"
-                    px={4}
-                    py={3}
-                    w="100%"
-                    _hover={{ bg: '#F5F7FA' }}
-                    transition="background 0.2s"
-                  >
-                    <HStack>
-                      <Box flex="1">
-                        <Text fontSize="13px" color="#333">
-                          {item.name}
-                        </Text>
-                      </Box>
-                      <Box flex="2" display="flex" justifyContent="center">
-                        <Text fontSize="13px" color="#333">
-                          {item.description}
-                        </Text>
-                      </Box>
-                      <Box flex="1" display="flex" justifyContent="center">
-                        <Text fontSize="13px" color="#333">
-                          {item.sector}
-                        </Text>
-                      </Box>
-                      <Box w="100px">
-                        <HStack gap={2} justify="center">
-                          <Box
-                            as="button"
-                            cursor="pointer"
-                            onClick={() => handleEditCounterparty(item._id)}
-                            _hover={{ opacity: 0.7 }}
-                            transition="opacity 0.2s"
-                          >
-                            <Image src="/edit-icon.png" alt="Edit" w="16px" h="16px" style={{ imageRendering: 'crisp-edges' }} />
-                          </Box>
-                          <Box
-                            as="button"
-                            cursor="pointer"
-                            onClick={() => handleDeleteCounterparty(item._id)}
-                            _hover={{ opacity: 0.7 }}
-                            transition="opacity 0.2s"
-                          >
-                            <Image src="/delete-icon.png" alt="Delete" w="16px" h="16px" style={{ imageRendering: 'crisp-edges' }} />
-                          </Box>
-                        </HStack>
-                      </Box>
-                    </HStack>
-                  </Box>
-                ))}
-              </VStack>
-
-              {/* Table Body - Mobile Cards */}
-              <VStack gap={3} display={{ base: 'flex', md: 'none' }}>
-                {paginatedCounterparties.map((item) => (
-                  <Box
-                    key={item._id}
-                    bg="white"
-                    borderRadius="8px"
-                    p={4}
-                    w="100%"
-                    boxShadow="sm"
-                  >
-                    <VStack align="stretch" gap={2}>
-                      <HStack justify="space-between">
-                        <Text fontSize="12px" fontWeight="600" color="#666">
-                          Counterparty:
-                        </Text>
-                        <Text fontSize="13px" color="#333">
-                          {item.name}
-                        </Text>
-                      </HStack>
-                      <HStack justify="space-between">
-                        <Text fontSize="12px" fontWeight="600" color="#666">
-                          Description:
-                        </Text>
-                        <Text fontSize="13px" color="#333">
-                          {item.description}
-                        </Text>
-                      </HStack>
-                      <HStack justify="space-between">
-                        <Text fontSize="12px" fontWeight="600" color="#666">
-                          Sector:
-                        </Text>
-                        <Text fontSize="13px" color="#333">
-                          {item.sector}
-                        </Text>
-                      </HStack>
-                      <HStack justify="flex-end" gap={3} mt={2}>
-                        <Box
-                          as="button"
-                          cursor="pointer"
-                          onClick={() => handleEditCounterparty(item._id)}
-                          _hover={{ opacity: 0.7 }}
-                          transition="opacity 0.2s"
-                        >
-                          <Image src="/edit-icon.png" alt="Edit" w="18px" h="18px" style={{ imageRendering: 'crisp-edges' }} />
-                        </Box>
-                        <Box
-                          as="button"
-                          cursor="pointer"
-                          onClick={() => handleDeleteCounterparty(item._id)}
-                          _hover={{ opacity: 0.7 }}
-                          transition="opacity 0.2s"
-                        >
-                          <Image src="/delete-icon.png" alt="Delete" w="18px" h="18px" style={{ imageRendering: 'crisp-edges' }} />
-                        </Box>
-                      </HStack>
-                    </VStack>
-                  </Box>
-                ))}
-              </VStack>
-            </Box>
-
-            {/* Pagination */}
-            <HStack justify="space-between" mt={6} flexWrap="wrap" gap={4}>
-              {/* Items per page */}
-              <HStack gap={2}>
-                <Text fontSize="13px" color="#666">
-                  Showing
-                </Text>
-                <ChakraSelect.Root
-                  collection={itemsPerPageCollection}
-                  size="sm"
-                  value={[counterpartiesItemsPerPage.toString()]}
-                  onValueChange={(e) => {
-                    setCounterpartiesItemsPerPage(Number(e.value[0]));
-                    setCounterpartiesCurrentPage(1);
-                  }}
-                  width="80px"
-                >
-                  <ChakraSelect.Trigger
-                    bg="white"
-                    borderColor="#E6E7EC"
-                    borderRadius="6px"
-                  >
-                    <ChakraSelect.ValueText />
-                  </ChakraSelect.Trigger>
-                  <ChakraSelect.Content bg="white" borderRadius="8px">
-                    {itemsPerPageOptions.map((option) => (
-                      <ChakraSelect.Item key={option.value} item={option}>
-                        {option.label}
-                      </ChakraSelect.Item>
-                    ))}
-                  </ChakraSelect.Content>
-                </ChakraSelect.Root>
-                <Text fontSize="13px" color="#666">
-                  out of {filteredCounterparties.length}
-                </Text>
-              </HStack>
-
-              {/* Page numbers */}
-              <HStack gap={1}>
-                {/* Previous button */}
-                <Box
-                  as="button"
-                  w="32px"
-                  h="32px"
-                  display="flex"
-                  alignItems="center"
-                  justifyContent="center"
-                  borderRadius="6px"
-                  bg="white"
-                  border="1px solid #E6E7EC"
-                  cursor={counterpartiesCurrentPage === 1 ? 'not-allowed' : 'pointer'}
-                  opacity={counterpartiesCurrentPage === 1 ? 0.5 : 1}
-                  onClick={() => counterpartiesCurrentPage > 1 && setCounterpartiesCurrentPage(counterpartiesCurrentPage - 1)}
-                  _hover={{
-                    bg: counterpartiesCurrentPage === 1 ? 'white' : '#F5F5F5',
-                  }}
-                >
-                  <Text fontSize="18px">&lt;</Text>
+        {/* Add/Edit Sector Modal */}
+        {(showAddSectorModal || showEditSectorModal) && (
+          <Box
+            position="fixed"
+            top="0"
+            left="0"
+            right="0"
+            bottom="0"
+            bg="rgba(0, 0, 0, 0.5)"
+            display="flex"
+            alignItems="center"
+            justifyContent="center"
+            zIndex="1000"
+            onClick={() => {
+              setShowAddSectorModal(false);
+              setShowEditSectorModal(false);
+              setSectorToEdit(null);
+              setNewSector({ name: '', description: '', isActive: true });
+            }}
+          >
+            <Box
+              bg="white"
+              borderRadius="12px"
+              p={6}
+              maxW="500px"
+              w="90%"
+              boxShadow="xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Text fontSize="18px" fontWeight="600" mb={4}>
+                {showEditSectorModal ? 'Edit Sector' : 'Add New Sector'}
+              </Text>
+              <VStack gap={4} align="stretch">
+                <Box>
+                  <Text fontSize="13px" fontWeight="500" mb={1}>
+                    Name*
+                  </Text>
+                  <Input
+                    value={newSector.name}
+                    onChange={(e) => setNewSector({ ...newSector, name: e.target.value })}
+                    placeholder="Enter sector name"
+                  />
                 </Box>
-
-                {/* Page numbers */}
-                {renderCounterpartiesPageNumbers.map((page, index) => (
-                  <Box
-                    key={index}
-                    as="button"
-                    minW="32px"
-                    h="32px"
-                    px={2}
-                    display="flex"
-                    alignItems="center"
-                    justifyContent="center"
-                    borderRadius="6px"
-                    bg={page === counterpartiesCurrentPage ? '#227CBF' : 'white'}
-                    color={page === counterpartiesCurrentPage ? 'white' : '#333'}
-                    border="1px solid"
-                    borderColor={page === counterpartiesCurrentPage ? '#227CBF' : '#E6E7EC'}
-                    cursor={page === '...' ? 'default' : 'pointer'}
-                    fontSize="13px"
-                    fontWeight={page === counterpartiesCurrentPage ? '600' : '400'}
-                    onClick={() =>
-                      typeof page === 'number' && setCounterpartiesCurrentPage(page)
-                    }
-                    _hover={{
-                      bg: page === '...' ? 'white' : page === counterpartiesCurrentPage ? '#227CBF' : '#F5F5F5',
+                <Box>
+                  <Text fontSize="13px" fontWeight="500" mb={1}>
+                    Description
+                  </Text>
+                  <Textarea
+                    value={newSector.description}
+                    onChange={(e) => setNewSector({ ...newSector, description: e.target.value })}
+                    placeholder="Enter description"
+                    rows={3}
+                  />
+                </Box>
+                <HStack gap={3} mt={4}>
+                  <Button
+                    flex="1"
+                    bg="#E0E0E0"
+                    color="#666"
+                    _hover={{ bg: '#D0D0D0' }}
+                    onClick={() => {
+                      setShowAddSectorModal(false);
+                      setShowEditSectorModal(false);
+                      setSectorToEdit(null);
+                      setNewSector({ name: '', description: '', isActive: true });
                     }}
                   >
-                    {page}
-                  </Box>
-                ))}
-
-                {/* Next button */}
-                <Box
-                  as="button"
-                  w="32px"
-                  h="32px"
-                  display="flex"
-                  alignItems="center"
-                  justifyContent="center"
-                  borderRadius="6px"
-                  bg="white"
-                  border="1px solid #E6E7EC"
-                  cursor={counterpartiesCurrentPage === counterpartiesTotalPages ? 'not-allowed' : 'pointer'}
-                  opacity={counterpartiesCurrentPage === counterpartiesTotalPages ? 0.5 : 1}
-                  onClick={() =>
-                    counterpartiesCurrentPage < counterpartiesTotalPages && setCounterpartiesCurrentPage(counterpartiesCurrentPage + 1)
-                  }
-                  _hover={{
-                    bg: counterpartiesCurrentPage === counterpartiesTotalPages ? 'white' : '#F5F5F5',
-                  }}
-                >
-                  <Text fontSize="18px">&gt;</Text>
-                </Box>
-              </HStack>
-            </HStack>
+                    Cancel
+                  </Button>
+                  <Button
+                    flex="1"
+                    bg="#227CBF"
+                    color="white"
+                    _hover={{ bg: '#1B6AA3' }}
+                    onClick={showEditSectorModal ? handleUpdateSector : handleAddSector}
+                    disabled={isCreatingSector || isUpdatingSector}
+                  >
+                    {isCreatingSector || isUpdatingSector ? 'Saving...' : showEditSectorModal ? 'Update' : 'Create'}
+                  </Button>
+                </HStack>
+              </VStack>
+            </Box>
           </Box>
         )}
 
-        {/* Sectors Tab */}
-        {activeTab === 'Sectors' && (
-          <Box bg="white" borderRadius="12px" p={6}>
-            {/* Search */}
-            <HStack gap={3} mb={6} flexWrap="wrap" align="center">
-              <Box minW="200px" flex="1" maxW="400px">
-                <Input
-                  placeholder="Search"
-                  value={sectorsSearchQuery}
-                  onChange={(e) => setSectorsSearchQuery(e.target.value)}
-                  size="sm"
-                  bg="white"
-                  borderColor="#D1D5DB"
-                  _hover={{ borderColor: '#9CA3AF' }}
-                  _focus={{ borderColor: '#227CBF', boxShadow: 'none' }}
-                  borderRadius="6px"
-                  height="40px"
-                />
-              </Box>
-            </HStack>
-
-            {/* Table */}
-            <Box overflowX="auto">
-              {/* Table Header */}
-              <Box
-                bg="#E2EEFE"
-                borderRadius="8px"
-                px={4}
-                py={3}
-                mb={2}
-                display={{ base: 'none', md: 'block' }}
-              >
-                <HStack>
-                  <Box flex="1">
-                    <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
-                      Sector
-                    </Text>
-                  </Box>
-                  <Box flex="2" display="flex" justifyContent="center" pr={20}>
-                    <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
-                      Sector Description
-                    </Text>
-                  </Box>
-                  <Box w="100px" textAlign="center">
-                    <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
-                      Actions
-                    </Text>
-                  </Box>
-                </HStack>
-              </Box>
-
-              {/* Table Body - Desktop */}
-              <VStack gap={2} display={{ base: 'none', md: 'flex' }}>
-                {paginatedSectors.map((item, index) => (
-                  <Box
-                    key={item._id}
-                    bg={index % 2 === 0 ? 'white' : '#F9FAFB'}
-                    borderRadius="8px"
-                    px={4}
-                    py={3}
-                    w="100%"
-                    _hover={{ bg: '#F5F7FA' }}
-                    transition="background 0.2s"
-                  >
-                    <HStack>
-                      <Box flex="1">
-                        <Text fontSize="13px" color="#333">
-                          {item.name}
-                        </Text>
-                      </Box>
-                      <Box flex="2" display="flex" justifyContent="center" pr={20}>
-                        <Text fontSize="13px" color="#333">
-                          {item.description}
-                        </Text>
-                      </Box>
-                      <Box w="100px">
-                        <HStack gap={2} justify="center">
-                          <Box
-                            as="button"
-                            cursor="pointer"
-                            onClick={() => handleEditSector(item._id)}
-                            _hover={{ opacity: 0.7 }}
-                            transition="opacity 0.2s"
-                          >
-                            <Image src="/edit-icon.png" alt="Edit" w="16px" h="16px" style={{ imageRendering: 'crisp-edges' }} />
-                          </Box>
-                          <Box
-                            as="button"
-                            cursor="pointer"
-                            onClick={() => handleDeleteSector(item._id)}
-                            _hover={{ opacity: 0.7 }}
-                            transition="opacity 0.2s"
-                          >
-                            <Image src="/delete-icon.png" alt="Delete" w="16px" h="16px" style={{ imageRendering: 'crisp-edges' }} />
-                          </Box>
-                        </HStack>
-                      </Box>
-                    </HStack>
-                  </Box>
-                ))}
-              </VStack>
-
-              {/* Table Body - Mobile Cards */}
-              <VStack gap={3} display={{ base: 'flex', md: 'none' }}>
-                {paginatedSectors.map((item) => (
-                  <Box
-                    key={item._id}
-                    bg="white"
-                    borderRadius="8px"
-                    p={4}
-                    w="100%"
-                    boxShadow="sm"
-                  >
-                    <VStack align="stretch" gap={2}>
-                      <HStack justify="space-between">
-                        <Text fontSize="12px" fontWeight="600" color="#666">
-                          Sector:
-                        </Text>
-                        <Text fontSize="13px" color="#333">
-                          {item.name}
-                        </Text>
-                      </HStack>
-                      <HStack justify="space-between">
-                        <Text fontSize="12px" fontWeight="600" color="#666">
-                          Description:
-                        </Text>
-                        <Text fontSize="13px" color="#333">
-                          {item.description}
-                        </Text>
-                      </HStack>
-                      <HStack justify="flex-end" gap={3} mt={2}>
-                        <Box
-                          as="button"
-                          cursor="pointer"
-                          onClick={() => handleEditSector(item._id)}
-                          _hover={{ opacity: 0.7 }}
-                          transition="opacity 0.2s"
-                        >
-                          <Image src="/edit-icon.png" alt="Edit" w="18px" h="18px" style={{ imageRendering: 'crisp-edges' }} />
-                        </Box>
-                        <Box
-                          as="button"
-                          cursor="pointer"
-                          onClick={() => handleDeleteSector(item._id)}
-                          _hover={{ opacity: 0.7 }}
-                          transition="opacity 0.2s"
-                        >
-                          <Image src="/delete-icon.png" alt="Delete" w="18px" h="18px" style={{ imageRendering: 'crisp-edges' }} />
-                        </Box>
-                      </HStack>
-                    </VStack>
-                  </Box>
-                ))}
-              </VStack>
-            </Box>
-
-            {/* Pagination */}
-            <HStack justify="space-between" mt={6} flexWrap="wrap" gap={4}>
-              {/* Items per page */}
-              <HStack gap={2}>
-                <Text fontSize="13px" color="#666">
-                  Showing
-                </Text>
-                <ChakraSelect.Root
-                  collection={itemsPerPageCollection}
-                  size="sm"
-                  value={[sectorsItemsPerPage.toString()]}
-                  onValueChange={(e) => {
-                    setSectorsItemsPerPage(Number(e.value[0]));
-                    setSectorsCurrentPage(1);
-                  }}
-                  width="80px"
-                >
-                  <ChakraSelect.Trigger
-                    bg="white"
-                    borderColor="#E6E7EC"
-                    borderRadius="6px"
-                  >
-                    <ChakraSelect.ValueText />
-                  </ChakraSelect.Trigger>
-                  <ChakraSelect.Content bg="white" borderRadius="8px">
-                    {itemsPerPageOptions.map((option) => (
-                      <ChakraSelect.Item key={option.value} item={option}>
-                        {option.label}
-                      </ChakraSelect.Item>
-                    ))}
-                  </ChakraSelect.Content>
-                </ChakraSelect.Root>
-                <Text fontSize="13px" color="#666">
-                  out of {filteredSectors.length}
-                </Text>
-              </HStack>
-
-              {/* Page numbers */}
-              <HStack gap={1}>
-                {/* Previous button */}
-                <Box
-                  as="button"
-                  w="32px"
-                  h="32px"
-                  display="flex"
-                  alignItems="center"
-                  justifyContent="center"
-                  borderRadius="6px"
-                  bg="white"
-                  border="1px solid #E6E7EC"
-                  cursor={sectorsCurrentPage === 1 ? 'not-allowed' : 'pointer'}
-                  opacity={sectorsCurrentPage === 1 ? 0.5 : 1}
-                  onClick={() => sectorsCurrentPage > 1 && setSectorsCurrentPage(sectorsCurrentPage - 1)}
-                  _hover={{
-                    bg: sectorsCurrentPage === 1 ? 'white' : '#F5F5F5',
+        {/* Delete Confirmation Modal */}
+        {(showDeleteModal || showDeleteDepartmentModal || showDeleteCounterpartyModal || showDeleteSectorModal) && (
+          <Box
+            position="fixed"
+            top="0"
+            left="0"
+            right="0"
+            bottom="0"
+            bg="rgba(0, 0, 0, 0.5)"
+            display="flex"
+            alignItems="center"
+            justifyContent="center"
+            zIndex="1000"
+            onClick={() => {
+              setShowDeleteModal(false);
+              setShowDeleteDepartmentModal(false);
+              setShowDeleteCounterpartyModal(false);
+              setShowDeleteSectorModal(false);
+            }}
+          >
+            <Box
+              bg="white"
+              borderRadius="12px"
+              p={6}
+              maxW="400px"
+              w="90%"
+              boxShadow="xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Text fontSize="18px" fontWeight="600" mb={4}>
+                Confirm Delete
+              </Text>
+              <Text fontSize="14px" color="#666" mb={6}>
+                Are you sure you want to delete this {activeTab === 'Employees' ? 'user' : activeTab.slice(0, -1).toLowerCase()}? This action cannot be undone.
+              </Text>
+              <HStack gap={3}>
+                <Button
+                  flex="1"
+                  bg="#E0E0E0"
+                  color="#666"
+                  _hover={{ bg: '#D0D0D0' }}
+                  onClick={() => {
+                    setShowDeleteModal(false);
+                    setShowDeleteDepartmentModal(false);
+                    setShowDeleteCounterpartyModal(false);
+                    setShowDeleteSectorModal(false);
                   }}
                 >
-                  <Text fontSize="18px">&lt;</Text>
-                </Box>
-
-                {/* Page numbers */}
-                {renderSectorsPageNumbers.map((page, index) => (
-                  <Box
-                    key={index}
-                    as="button"
-                    minW="32px"
-                    h="32px"
-                    px={2}
-                    display="flex"
-                    alignItems="center"
-                    justifyContent="center"
-                    borderRadius="6px"
-                    bg={page === sectorsCurrentPage ? '#227CBF' : 'white'}
-                    color={page === sectorsCurrentPage ? 'white' : '#333'}
-                    border="1px solid"
-                    borderColor={page === sectorsCurrentPage ? '#227CBF' : '#E6E7EC'}
-                    cursor={page === '...' ? 'default' : 'pointer'}
-                    fontSize="13px"
-                    fontWeight={page === sectorsCurrentPage ? '600' : '400'}
-                    onClick={() =>
-                      typeof page === 'number' && setSectorsCurrentPage(page)
-                    }
-                    _hover={{
-                      bg: page === '...' ? 'white' : page === sectorsCurrentPage ? '#227CBF' : '#F5F5F5',
-                    }}
-                  >
-                    {page}
-                  </Box>
-                ))}
-
-                {/* Next button */}
-                <Box
-                  as="button"
-                  w="32px"
-                  h="32px"
-                  display="flex"
-                  alignItems="center"
-                  justifyContent="center"
-                  borderRadius="6px"
-                  bg="white"
-                  border="1px solid #E6E7EC"
-                  cursor={sectorsCurrentPage === sectorsTotalPages ? 'not-allowed' : 'pointer'}
-                  opacity={sectorsCurrentPage === sectorsTotalPages ? 0.5 : 1}
-                  onClick={() =>
-                    sectorsCurrentPage < sectorsTotalPages && setSectorsCurrentPage(sectorsCurrentPage + 1)
+                  Cancel
+                </Button>
+                <Button
+                  flex="1"
+                  bg="#EF5350"
+                  color="white"
+                  _hover={{ bg: '#E53935' }}
+                  onClick={
+                    showDeleteModal
+                      ? confirmDeleteUser
+                      : showDeleteDepartmentModal
+                      ? confirmDeleteDepartment
+                      : showDeleteCounterpartyModal
+                      ? confirmDeleteCounterparty
+                      : confirmDeleteSector
                   }
-                  _hover={{
-                    bg: sectorsCurrentPage === sectorsTotalPages ? 'white' : '#F5F5F5',
-                  }}
+                  disabled={isDeletingUser || isDeletingDepartment || isDeletingCounterparty || isDeletingSector}
                 >
-                  <Text fontSize="18px">&gt;</Text>
-                </Box>
+                  {isDeletingUser || isDeletingDepartment || isDeletingCounterparty || isDeletingSector ? 'Deleting...' : 'Delete'}
+                </Button>
               </HStack>
-            </HStack>
-          </Box>
-        )}
-
-        {/* Activity Log Tab */}
-        {activeTab === 'Activity log' && (
-          <Box bg="white" borderRadius="12px" p={6}>
-            {/* Table */}
-            <Box overflowX="auto">
-              {/* Table Header */}
-              <Box
-                bg="#E2EEFE"
-                borderRadius="8px"
-                px={4}
-                py={3}
-                mb={2}
-                display={{ base: 'none', md: 'block' }}
-              >
-                <HStack>
-                  <Box flex="1">
-                    <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
-                      Full Name
-                    </Text>
-                  </Box>
-                  <Box flex="1">
-                    <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
-                      Email Address
-                    </Text>
-                  </Box>
-                  <Box flex="1">
-                    <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
-                      Date/Time
-                    </Text>
-                  </Box>
-                  <Box flex="2">
-                    <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
-                      Actions
-                    </Text>
-                  </Box>
-                </HStack>
-              </Box>
-
-              {/* Table Body - Desktop */}
-              <VStack gap={2} display={{ base: 'none', md: 'flex' }}>
-                {paginatedActivityLogs.map((item, index) => (
-                  <Box
-                    key={item._id}
-                    bg={index % 2 === 0 ? 'white' : '#F9FAFB'}
-                    borderRadius="8px"
-                    px={4}
-                    py={3}
-                    w="100%"
-                    _hover={{ bg: '#F5F7FA' }}
-                    transition="background 0.2s"
-                  >
-                    <HStack>
-                      <Box flex="1">
-                        <Text fontSize="13px" color="#333">
-                          {item.fullName}
-                        </Text>
-                      </Box>
-                      <Box flex="1">
-                        <Text fontSize="13px" color="#333">
-                          {item.email}
-                        </Text>
-                      </Box>
-                      <Box flex="1">
-                        <Text fontSize="13px" color="#333">
-                          {item.dateTime}
-                        </Text>
-                      </Box>
-                      <Box flex="2">
-                        <Text fontSize="13px" color="#333">
-                          {item.action}
-                        </Text>
-                      </Box>
-                    </HStack>
-                  </Box>
-                ))}
-              </VStack>
-
-              {/* Table Body - Mobile Cards */}
-              <VStack gap={3} display={{ base: 'flex', md: 'none' }}>
-                {paginatedActivityLogs.map((item) => (
-                  <Box
-                    key={item._id}
-                    bg="white"
-                    borderRadius="8px"
-                    p={4}
-                    w="100%"
-                    boxShadow="sm"
-                  >
-                    <VStack align="stretch" gap={2}>
-                      <HStack justify="space-between">
-                        <Text fontSize="12px" fontWeight="600" color="#666">
-                          Full Name:
-                        </Text>
-                        <Text fontSize="13px" color="#333">
-                          {item.fullName}
-                        </Text>
-                      </HStack>
-                      <HStack justify="space-between">
-                        <Text fontSize="12px" fontWeight="600" color="#666">
-                          Email:
-                        </Text>
-                        <Text fontSize="13px" color="#333">
-                          {item.email}
-                        </Text>
-                      </HStack>
-                      <HStack justify="space-between">
-                        <Text fontSize="12px" fontWeight="600" color="#666">
-                          Date/Time:
-                        </Text>
-                        <Text fontSize="13px" color="#333">
-                          {item.dateTime}
-                        </Text>
-                      </HStack>
-                      <Box>
-                        <Text fontSize="12px" fontWeight="600" color="#666" mb={1}>
-                          Actions:
-                        </Text>
-                        <Text fontSize="13px" color="#333">
-                          {item.action}
-                        </Text>
-                      </Box>
-                    </VStack>
-                  </Box>
-                ))}
-              </VStack>
             </Box>
-
-            {/* Pagination */}
-            <HStack justify="space-between" mt={6} flexWrap="wrap" gap={4}>
-              {/* Items per page */}
-              <HStack gap={2}>
-                <Text fontSize="13px" color="#666">
-                  Showing
-                </Text>
-                <ChakraSelect.Root
-                  collection={itemsPerPageCollection}
-                  size="sm"
-                  value={[activityLogsItemsPerPage.toString()]}
-                  onValueChange={(e) => {
-                    setActivityLogsItemsPerPage(Number(e.value[0]));
-                    setActivityLogsCurrentPage(1);
-                  }}
-                  width="80px"
-                >
-                  <ChakraSelect.Trigger
-                    bg="white"
-                    borderColor="#E6E7EC"
-                    borderRadius="6px"
-                  >
-                    <ChakraSelect.ValueText />
-                  </ChakraSelect.Trigger>
-                  <ChakraSelect.Content bg="white" borderRadius="8px">
-                    {itemsPerPageOptions.map((option) => (
-                      <ChakraSelect.Item key={option.value} item={option}>
-                        {option.label}
-                      </ChakraSelect.Item>
-                    ))}
-                  </ChakraSelect.Content>
-                </ChakraSelect.Root>
-                <Text fontSize="13px" color="#666">
-                  out of {filteredActivityLogs.length}
-                </Text>
-              </HStack>
-
-              {/* Page numbers */}
-              <HStack gap={1}>
-                {/* Previous button */}
-                <Box
-                  as="button"
-                  w="32px"
-                  h="32px"
-                  display="flex"
-                  alignItems="center"
-                  justifyContent="center"
-                  borderRadius="6px"
-                  bg="white"
-                  border="1px solid #E6E7EC"
-                  cursor={activityLogsCurrentPage === 1 ? 'not-allowed' : 'pointer'}
-                  opacity={activityLogsCurrentPage === 1 ? 0.5 : 1}
-                  onClick={() => activityLogsCurrentPage > 1 && setActivityLogsCurrentPage(activityLogsCurrentPage - 1)}
-                  _hover={{
-                    bg: activityLogsCurrentPage === 1 ? 'white' : '#F5F5F5',
-                  }}
-                >
-                  <Text fontSize="18px">&lt;</Text>
-                </Box>
-
-                {/* Page numbers */}
-                {renderActivityLogsPageNumbers.map((page, index) => (
-                  <Box
-                    key={index}
-                    as="button"
-                    minW="32px"
-                    h="32px"
-                    px={2}
-                    display="flex"
-                    alignItems="center"
-                    justifyContent="center"
-                    borderRadius="6px"
-                    bg={page === activityLogsCurrentPage ? '#227CBF' : 'white'}
-                    color={page === activityLogsCurrentPage ? 'white' : '#333'}
-                    border="1px solid"
-                    borderColor={page === activityLogsCurrentPage ? '#227CBF' : '#E6E7EC'}
-                    cursor={page === '...' ? 'default' : 'pointer'}
-                    fontSize="13px"
-                    fontWeight={page === activityLogsCurrentPage ? '600' : '400'}
-                    onClick={() =>
-                      typeof page === 'number' && setActivityLogsCurrentPage(page)
-                    }
-                    _hover={{
-                      bg: page === '...' ? 'white' : page === activityLogsCurrentPage ? '#227CBF' : '#F5F5F5',
-                    }}
-                  >
-                    {page}
-                  </Box>
-                ))}
-
-                {/* Next button */}
-                <Box
-                  as="button"
-                  w="32px"
-                  h="32px"
-                  display="flex"
-                  alignItems="center"
-                  justifyContent="center"
-                  borderRadius="6px"
-                  bg="white"
-                  border="1px solid #E6E7EC"
-                  cursor={activityLogsCurrentPage === activityLogsTotalPages ? 'not-allowed' : 'pointer'}
-                  opacity={activityLogsCurrentPage === activityLogsTotalPages ? 0.5 : 1}
-                  onClick={() =>
-                    activityLogsCurrentPage < activityLogsTotalPages && setActivityLogsCurrentPage(activityLogsCurrentPage + 1)
-                  }
-                  _hover={{
-                    bg: activityLogsCurrentPage === activityLogsTotalPages ? 'white' : '#F5F5F5',
-                  }}
-                >
-                  <Text fontSize="18px">&gt;</Text>
-                </Box>
-              </HStack>
-            </HStack>
           </Box>
         )}
       </Box>
-
-      {/* Add Employee Modal */}
-      {showAddModal && (
-        <Box
-          position="fixed"
-          top="0"
-          left="0"
-          right="0"
-          bottom="0"
-          bg="rgba(0, 0, 0, 0.5)"
-          display="flex"
-          alignItems="center"
-          justifyContent="center"
-          zIndex="9999"
-          onClick={cancelAddEmployee}
-        >
-          <Box
-            bg="white"
-            borderRadius="12px"
-            p={5}
-            maxW="440px"
-            w="90%"
-            boxShadow="xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <VStack gap={3} align="stretch">
-              {/* Header with close button */}
-              <HStack justify="space-between" mb={1}>
-                <Text fontSize="18px" fontWeight="600" color="#333">
-                  Add Employee
-                </Text>
-                <Box
-                  as="button"
-                  onClick={cancelAddEmployee}
-                  cursor="pointer"
-                  color="#666"
-                  _hover={{ color: '#333' }}
-                  fontSize="22px"
-                  lineHeight="1"
-                >
-                  ×
-                </Box>
-              </HStack>
-
-              <Text fontSize="13px" color="#666" mb={1}>
-                Add a new employee to the investment assessment system.
-              </Text>
-
-              {/* First Name */}
-              <Box>
-                <Text fontSize="13px" fontWeight="500" color="#333" mb={1.5}>
-                  First Name
-                </Text>
-                <Input
-                  placeholder="Type"
-                  value={newEmployee.firstName}
-                  onChange={(e) => setNewEmployee({ ...newEmployee, firstName: e.target.value })}
-                  bg="white"
-                  borderColor="#D1D5DB"
-                  _hover={{ borderColor: '#9CA3AF' }}
-                  _focus={{ borderColor: '#227CBF', boxShadow: 'none' }}
-                  borderRadius="6px"
-                  height="38px"
-                  fontSize="14px"
-                />
-              </Box>
-
-              {/* Last Name */}
-              <Box>
-                <Text fontSize="13px" fontWeight="500" color="#333" mb={1.5}>
-                  Last Name
-                </Text>
-                <Input
-                  placeholder="Type"
-                  value={newEmployee.lastName}
-                  onChange={(e) => setNewEmployee({ ...newEmployee, lastName: e.target.value })}
-                  bg="white"
-                  borderColor="#D1D5DB"
-                  _hover={{ borderColor: '#9CA3AF' }}
-                  _focus={{ borderColor: '#227CBF', boxShadow: 'none' }}
-                  borderRadius="6px"
-                  height="38px"
-                  fontSize="14px"
-                />
-              </Box>
-
-              {/* Email Address */}
-              <Box>
-                <Text fontSize="13px" fontWeight="500" color="#333" mb={1.5}>
-                  Email Address
-                </Text>
-                <Input
-                  placeholder="Type"
-                  type="email"
-                  value={newEmployee.email}
-                  onChange={(e) => setNewEmployee({ ...newEmployee, email: e.target.value })}
-                  bg="white"
-                  borderColor="#D1D5DB"
-                  _hover={{ borderColor: '#9CA3AF' }}
-                  _focus={{ borderColor: '#227CBF', boxShadow: 'none' }}
-                  borderRadius="6px"
-                  height="38px"
-                  fontSize="14px"
-                />
-              </Box>
-
-              {/* Department */}
-              <Box>
-                <Text fontSize="13px" fontWeight="500" color="#333" mb={1.5}>
-                  Department
-                </Text>
-                <ChakraSelect.Root
-                  collection={departmentCollection}
-                  size="sm"
-                  value={[newEmployee.department]}
-                  onValueChange={(e) => setNewEmployee({ ...newEmployee, department: e.value[0] })}
-                >
-                  <ChakraSelect.Trigger
-                    bg="white"
-                    borderColor="#D1D5DB"
-                    _hover={{ borderColor: '#9CA3AF' }}
-                    borderRadius="6px"
-                    height="38px"
-                    fontSize="14px"
-                  >
-                    <ChakraSelect.ValueText placeholder="Select" />
-                    <ChakraSelect.Indicator />
-                  </ChakraSelect.Trigger>
-                  <ChakraSelect.Content
-                    bg="white"
-                    borderRadius="8px"
-                    boxShadow="lg"
-                    zIndex={1500}
-                    position="absolute"
-                  >
-                    {departmentOptions.map((option) => (
-                      <ChakraSelect.Item key={option.value} item={option}>
-                        {option.label}
-                      </ChakraSelect.Item>
-                    ))}
-                  </ChakraSelect.Content>
-                </ChakraSelect.Root>
-              </Box>
-
-              {/* Role */}
-              <Box>
-                <Text fontSize="13px" fontWeight="500" color="#333" mb={1.5}>
-                  Role
-                </Text>
-                <ChakraSelect.Root
-                  collection={roleCollection}
-                  size="sm"
-                  value={[newEmployee.role]}
-                  onValueChange={(e) => setNewEmployee({ ...newEmployee, role: e.value[0] })}
-                >
-                  <ChakraSelect.Trigger
-                    bg="white"
-                    borderColor="#D1D5DB"
-                    _hover={{ borderColor: '#9CA3AF' }}
-                    borderRadius="6px"
-                    height="38px"
-                    fontSize="14px"
-                  >
-                    <ChakraSelect.ValueText placeholder="Select" />
-                    <ChakraSelect.Indicator />
-                  </ChakraSelect.Trigger>
-                  <ChakraSelect.Content
-                    bg="white"
-                    borderRadius="8px"
-                    boxShadow="lg"
-                    zIndex={1500}
-                    position="absolute"
-                  >
-                    {roleOptions.map((option) => (
-                      <ChakraSelect.Item key={option.value} item={option}>
-                        {option.label}
-                      </ChakraSelect.Item>
-                    ))}
-                  </ChakraSelect.Content>
-                </ChakraSelect.Root>
-              </Box>
-
-              {/* Buttons */}
-              <HStack gap={2.5} mt={3}>
-                <Button
-                  flex="1"
-                  bg="#E6E7EC"
-                  color="#333"
-                  fontSize="14px"
-                  fontWeight="500"
-                  h="40px"
-                  borderRadius="8px"
-                  _hover={{ bg: '#D1D5DB' }}
-                  onClick={cancelAddEmployee}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  flex="1"
-                  bg="#47B65C"
-                  color="white"
-                  fontSize="14px"
-                  fontWeight="500"
-                  h="40px"
-                  borderRadius="8px"
-                  _hover={{ bg: '#3DA550' }}
-                  onClick={handleAddEmployee}
-                >
-                  Add Employee
-                </Button>
-              </HStack>
-            </VStack>
-          </Box>
-        </Box>
-      )}
-
-      {/* Delete Confirmation Modal */}
-      {showDeleteModal && (
-        <Box
-          position="fixed"
-          top="0"
-          left="0"
-          right="0"
-          bottom="0"
-          bg="rgba(0, 0, 0, 0.5)"
-          display="flex"
-          alignItems="center"
-          justifyContent="center"
-          zIndex="9999"
-          onClick={cancelDelete}
-        >
-          <Box
-            bg="white"
-            borderRadius="12px"
-            p={6}
-            maxW="400px"
-            w="90%"
-            boxShadow="xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <VStack gap={4} align="stretch">
-              <Text fontSize="20px" fontWeight="600" color="#333" textAlign="center">
-                Delete Employee
-              </Text>
-              <Text fontSize="14px" color="#666" textAlign="center">
-                Are you sure you want to delete this employee? This action cannot be undone.
-              </Text>
-              <HStack gap={3} mt={2}>
-                <Button
-                  flex="1"
-                  bg="#E6E7EC"
-                  color="#333"
-                  fontSize="14px"
-                  fontWeight="500"
-                  h="42px"
-                  borderRadius="8px"
-                  _hover={{ bg: '#D1D5DB' }}
-                  onClick={cancelDelete}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  flex="1"
-                  bg="#FF6B47"
-                  color="white"
-                  fontSize="14px"
-                  fontWeight="500"
-                  h="42px"
-                  borderRadius="8px"
-                  _hover={{ bg: '#E55529' }}
-                  onClick={confirmDelete}
-                >
-                  Delete
-                </Button>
-              </HStack>
-            </VStack>
-          </Box>
-        </Box>
-      )}
-
-      {/* Add Role Modal */}
-      {showAddRoleModal && (
-        <Box
-          position="fixed"
-          top="0"
-          left="0"
-          right="0"
-          bottom="0"
-          bg="rgba(0, 0, 0, 0.5)"
-          display="flex"
-          alignItems="center"
-          justifyContent="center"
-          zIndex="9999"
-          onClick={cancelAddRole}
-        >
-          <Box
-            bg="white"
-            borderRadius="12px"
-            p={5}
-            maxW="440px"
-            w="90%"
-            boxShadow="xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <VStack gap={3} align="stretch">
-              <HStack justify="space-between" mb={1}>
-                <Text fontSize="18px" fontWeight="600" color="#333">
-                  Add Role
-                </Text>
-                <Box
-                  as="button"
-                  onClick={cancelAddRole}
-                  cursor="pointer"
-                  color="#666"
-                  _hover={{ color: '#333' }}
-                  fontSize="22px"
-                  lineHeight="1"
-                >
-                  ×
-                </Box>
-              </HStack>
-
-              <Box>
-                <Text fontSize="13px" fontWeight="500" color="#333" mb={1.5}>
-                  Role
-                </Text>
-                <Input
-                  placeholder="Type"
-                  value={newRole.name}
-                  onChange={(e) => setNewRole({ ...newRole, name: e.target.value })}
-                  bg="white"
-                  borderColor="#D1D5DB"
-                  _hover={{ borderColor: '#9CA3AF' }}
-                  _focus={{ borderColor: '#227CBF', boxShadow: 'none' }}
-                  borderRadius="6px"
-                  height="38px"
-                  fontSize="14px"
-                />
-              </Box>
-
-              <Box>
-                <Text fontSize="13px" fontWeight="500" color="#333" mb={1.5}>
-                  Description
-                </Text>
-                <Textarea
-                  placeholder="Type"
-                  value={newRole.description}
-                  onChange={(e) => setNewRole({ ...newRole, description: e.target.value })}
-                  bg="white"
-                  borderColor="#D1D5DB"
-                  _hover={{ borderColor: '#9CA3AF' }}
-                  _focus={{ borderColor: '#227CBF', boxShadow: 'none' }}
-                  borderRadius="6px"
-                  height="100px"
-                  fontSize="14px"
-                  resize="vertical"
-                />
-              </Box>
-
-              <HStack gap={2.5} mt={3}>
-                <Button
-                  flex="1"
-                  bg="#E6E7EC"
-                  color="#333"
-                  fontSize="14px"
-                  fontWeight="500"
-                  h="40px"
-                  borderRadius="8px"
-                  _hover={{ bg: '#D1D5DB' }}
-                  onClick={cancelAddRole}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  flex="1"
-                  bg="#47B65C"
-                  color="white"
-                  fontSize="14px"
-                  fontWeight="500"
-                  h="40px"
-                  borderRadius="8px"
-                  _hover={{ bg: '#3DA550' }}
-                  onClick={handleAddRole}
-                >
-                  Add Role
-                </Button>
-              </HStack>
-            </VStack>
-          </Box>
-        </Box>
-      )}
-
-      {/* Edit Role Modal */}
-      {showEditRoleModal && (
-        <Box
-          position="fixed"
-          top="0"
-          left="0"
-          right="0"
-          bottom="0"
-          bg="rgba(0, 0, 0, 0.5)"
-          display="flex"
-          alignItems="center"
-          justifyContent="center"
-          zIndex="9999"
-          onClick={cancelEditRole}
-        >
-          <Box
-            bg="white"
-            borderRadius="12px"
-            p={5}
-            maxW="440px"
-            w="90%"
-            boxShadow="xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <VStack gap={3} align="stretch">
-              <HStack justify="space-between" mb={1}>
-                <Text fontSize="18px" fontWeight="600" color="#333">
-                  Edit Role
-                </Text>
-                <Box
-                  as="button"
-                  onClick={cancelEditRole}
-                  cursor="pointer"
-                  color="#666"
-                  _hover={{ color: '#333' }}
-                  fontSize="22px"
-                  lineHeight="1"
-                >
-                  ×
-                </Box>
-              </HStack>
-
-              <Text fontSize="13px" color="#666" mb={1}>
-                Update role information.
-              </Text>
-
-              <Box>
-                <Text fontSize="13px" fontWeight="500" color="#333" mb={1.5}>
-                  Role Name
-                </Text>
-                <Input
-                  placeholder="Type"
-                  value={editRole.name}
-                  onChange={(e) => setEditRole({ ...editRole, name: e.target.value })}
-                  bg="white"
-                  borderColor="#D1D5DB"
-                  _hover={{ borderColor: '#9CA3AF' }}
-                  _focus={{ borderColor: '#227CBF', boxShadow: 'none' }}
-                  borderRadius="6px"
-                  height="38px"
-                  fontSize="14px"
-                />
-              </Box>
-
-              <Box>
-                <Text fontSize="13px" fontWeight="500" color="#333" mb={1.5}>
-                  Role Description
-                </Text>
-                <Input
-                  placeholder="Type"
-                  value={editRole.description}
-                  onChange={(e) => setEditRole({ ...editRole, description: e.target.value })}
-                  bg="white"
-                  borderColor="#D1D5DB"
-                  _hover={{ borderColor: '#9CA3AF' }}
-                  _focus={{ borderColor: '#227CBF', boxShadow: 'none' }}
-                  borderRadius="6px"
-                  height="38px"
-                  fontSize="14px"
-                />
-              </Box>
-
-              <HStack gap={2.5} mt={3}>
-                <Button
-                  flex="1"
-                  bg="#E6E7EC"
-                  color="#333"
-                  fontSize="14px"
-                  fontWeight="500"
-                  h="40px"
-                  borderRadius="8px"
-                  _hover={{ bg: '#D1D5DB' }}
-                  onClick={cancelEditRole}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  flex="1"
-                  bg="#47B65C"
-                  color="white"
-                  fontSize="14px"
-                  fontWeight="500"
-                  h="40px"
-                  borderRadius="8px"
-                  _hover={{ bg: '#3DA550' }}
-                  onClick={handleUpdateRole}
-                >
-                  Update Role
-                </Button>
-              </HStack>
-            </VStack>
-          </Box>
-        </Box>
-      )}
-
-      {/* Delete Role Confirmation Modal */}
-      {showDeleteRoleModal && (
-        <Box
-          position="fixed"
-          top="0"
-          left="0"
-          right="0"
-          bottom="0"
-          bg="rgba(0, 0, 0, 0.5)"
-          display="flex"
-          alignItems="center"
-          justifyContent="center"
-          zIndex="9999"
-          onClick={cancelDeleteRole}
-        >
-          <Box
-            bg="white"
-            borderRadius="12px"
-            p={6}
-            maxW="400px"
-            w="90%"
-            boxShadow="xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <VStack gap={4} align="stretch">
-              <Text fontSize="20px" fontWeight="600" color="#333" textAlign="center">
-                Delete Role
-              </Text>
-              <Text fontSize="14px" color="#666" textAlign="center">
-                Are you sure you want to delete this role? This action cannot be undone.
-              </Text>
-              <HStack gap={3} mt={2}>
-                <Button
-                  flex="1"
-                  bg="#E6E7EC"
-                  color="#333"
-                  fontSize="14px"
-                  fontWeight="500"
-                  h="42px"
-                  borderRadius="8px"
-                  _hover={{ bg: '#D1D5DB' }}
-                  onClick={cancelDeleteRole}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  flex="1"
-                  bg="#FF6B47"
-                  color="white"
-                  fontSize="14px"
-                  fontWeight="500"
-                  h="42px"
-                  borderRadius="8px"
-                  _hover={{ bg: '#E55529' }}
-                  onClick={confirmDeleteRole}
-                >
-                  Delete
-                </Button>
-              </HStack>
-            </VStack>
-          </Box>
-        </Box>
-      )}
-
-      {/* Add Department Modal */}
-      {showAddDepartmentModal && (
-        <Box
-          position="fixed"
-          top="0"
-          left="0"
-          right="0"
-          bottom="0"
-          bg="rgba(0, 0, 0, 0.5)"
-          display="flex"
-          alignItems="center"
-          justifyContent="center"
-          zIndex="9999"
-          onClick={cancelAddDepartment}
-        >
-          <Box
-            bg="white"
-            borderRadius="12px"
-            p={5}
-            maxW="440px"
-            w="90%"
-            boxShadow="xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <VStack gap={3} align="stretch">
-              <HStack justify="space-between" mb={1}>
-                <Text fontSize="18px" fontWeight="600" color="#333">
-                  Add Department
-                </Text>
-                <Box
-                  as="button"
-                  onClick={cancelAddDepartment}
-                  cursor="pointer"
-                  color="#666"
-                  _hover={{ color: '#333' }}
-                  fontSize="22px"
-                  lineHeight="1"
-                >
-                  ×
-                </Box>
-              </HStack>
-
-              <Box>
-                <Text fontSize="13px" fontWeight="500" color="#333" mb={1.5}>
-                  Department
-                </Text>
-                <Input
-                  placeholder="Type"
-                  value={newDepartment.name}
-                  onChange={(e) => setNewDepartment({ ...newDepartment, name: e.target.value })}
-                  bg="white"
-                  borderColor="#D1D5DB"
-                  _hover={{ borderColor: '#9CA3AF' }}
-                  _focus={{ borderColor: '#227CBF', boxShadow: 'none' }}
-                  borderRadius="6px"
-                  height="38px"
-                  fontSize="14px"
-                />
-              </Box>
-
-              <Box>
-                <Text fontSize="13px" fontWeight="500" color="#333" mb={1.5}>
-                  Description
-                </Text>
-                <Textarea
-                  placeholder="Type"
-                  value={newDepartment.description}
-                  onChange={(e) => setNewDepartment({ ...newDepartment, description: e.target.value })}
-                  bg="white"
-                  borderColor="#D1D5DB"
-                  _hover={{ borderColor: '#9CA3AF' }}
-                  _focus={{ borderColor: '#227CBF', boxShadow: 'none' }}
-                  borderRadius="6px"
-                  height="100px"
-                  fontSize="14px"
-                  resize="vertical"
-                />
-              </Box>
-
-              <HStack gap={2.5} mt={3}>
-                <Button
-                  flex="1"
-                  bg="#E6E7EC"
-                  color="#333"
-                  fontSize="14px"
-                  fontWeight="500"
-                  h="40px"
-                  borderRadius="8px"
-                  _hover={{ bg: '#D1D5DB' }}
-                  onClick={cancelAddDepartment}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  flex="1"
-                  bg="#47B65C"
-                  color="white"
-                  fontSize="14px"
-                  fontWeight="500"
-                  h="40px"
-                  borderRadius="8px"
-                  _hover={{ bg: '#3DA550' }}
-                  onClick={handleAddDepartment}
-                >
-                  Add Department
-                </Button>
-              </HStack>
-            </VStack>
-          </Box>
-        </Box>
-      )}
-
-      {/* Edit Department Modal */}
-      {showEditDepartmentModal && (
-        <Box
-          position="fixed"
-          top="0"
-          left="0"
-          right="0"
-          bottom="0"
-          bg="rgba(0, 0, 0, 0.5)"
-          display="flex"
-          alignItems="center"
-          justifyContent="center"
-          zIndex="9999"
-          onClick={cancelEditDepartment}
-        >
-          <Box
-            bg="white"
-            borderRadius="12px"
-            p={5}
-            maxW="440px"
-            w="90%"
-            boxShadow="xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <VStack gap={3} align="stretch">
-              <HStack justify="space-between" mb={1}>
-                <Text fontSize="18px" fontWeight="600" color="#333">
-                  Edit Department
-                </Text>
-                <Box
-                  as="button"
-                  onClick={cancelEditDepartment}
-                  cursor="pointer"
-                  color="#666"
-                  _hover={{ color: '#333' }}
-                  fontSize="22px"
-                  lineHeight="1"
-                >
-                  ×
-                </Box>
-              </HStack>
-
-              <Box>
-                <Text fontSize="13px" fontWeight="500" color="#333" mb={1.5}>
-                  Department
-                </Text>
-                <Input
-                  placeholder="Type"
-                  value={editDepartment.name}
-                  onChange={(e) => setEditDepartment({ ...editDepartment, name: e.target.value })}
-                  bg="white"
-                  borderColor="#D1D5DB"
-                  _hover={{ borderColor: '#9CA3AF' }}
-                  _focus={{ borderColor: '#227CBF', boxShadow: 'none' }}
-                  borderRadius="6px"
-                  height="38px"
-                  fontSize="14px"
-                />
-              </Box>
-
-              <Box>
-                <Text fontSize="13px" fontWeight="500" color="#333" mb={1.5}>
-                  Description
-                </Text>
-                <Textarea
-                  placeholder="Type"
-                  value={editDepartment.description}
-                  onChange={(e) => setEditDepartment({ ...editDepartment, description: e.target.value })}
-                  bg="white"
-                  borderColor="#D1D5DB"
-                  _hover={{ borderColor: '#9CA3AF' }}
-                  _focus={{ borderColor: '#227CBF', boxShadow: 'none' }}
-                  borderRadius="6px"
-                  height="100px"
-                  fontSize="14px"
-                  resize="vertical"
-                />
-              </Box>
-
-              <HStack gap={2.5} mt={3}>
-                <Button
-                  flex="1"
-                  bg="#E6E7EC"
-                  color="#333"
-                  fontSize="14px"
-                  fontWeight="500"
-                  h="40px"
-                  borderRadius="8px"
-                  _hover={{ bg: '#D1D5DB' }}
-                  onClick={cancelEditDepartment}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  flex="1"
-                  bg="#47B65C"
-                  color="white"
-                  fontSize="14px"
-                  fontWeight="500"
-                  h="40px"
-                  borderRadius="8px"
-                  _hover={{ bg: '#3DA550' }}
-                  onClick={handleUpdateDepartment}
-                >
-                  Update Department
-                </Button>
-              </HStack>
-            </VStack>
-          </Box>
-        </Box>
-      )}
-
-      {/* Delete Department Confirmation Modal */}
-      {showDeleteDepartmentModal && (
-        <Box
-          position="fixed"
-          top="0"
-          left="0"
-          right="0"
-          bottom="0"
-          bg="rgba(0, 0, 0, 0.5)"
-          display="flex"
-          alignItems="center"
-          justifyContent="center"
-          zIndex="9999"
-          onClick={cancelDeleteDepartment}
-        >
-          <Box
-            bg="white"
-            borderRadius="12px"
-            p={6}
-            maxW="400px"
-            w="90%"
-            boxShadow="xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <VStack gap={4} align="stretch">
-              <Text fontSize="20px" fontWeight="600" color="#333" textAlign="center">
-                Delete Department
-              </Text>
-              <Text fontSize="14px" color="#666" textAlign="center">
-                Are you sure you want to delete this department? This action cannot be undone.
-              </Text>
-              <HStack gap={3} mt={2}>
-                <Button
-                  flex="1"
-                  bg="#E6E7EC"
-                  color="#333"
-                  fontSize="14px"
-                  fontWeight="500"
-                  h="42px"
-                  borderRadius="8px"
-                  _hover={{ bg: '#D1D5DB' }}
-                  onClick={cancelDeleteDepartment}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  flex="1"
-                  bg="#FF6B47"
-                  color="white"
-                  fontSize="14px"
-                  fontWeight="500"
-                  h="42px"
-                  borderRadius="8px"
-                  _hover={{ bg: '#E55529' }}
-                  onClick={confirmDeleteDepartment}
-                >
-                  Delete
-                </Button>
-              </HStack>
-            </VStack>
-          </Box>
-        </Box>
-      )}
-
-      {/* Add Counterparty Modal */}
-      {showAddCounterpartyModal && (
-        <Box
-          position="fixed"
-          top="0"
-          left="0"
-          right="0"
-          bottom="0"
-          bg="rgba(0, 0, 0, 0.5)"
-          display="flex"
-          alignItems="center"
-          justifyContent="center"
-          zIndex="9999"
-          onClick={cancelAddCounterparty}
-        >
-          <Box
-            bg="white"
-            borderRadius="12px"
-            p={5}
-            maxW="440px"
-            w="90%"
-            boxShadow="xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <VStack gap={3} align="stretch">
-              <HStack justify="space-between" mb={1}>
-                <Text fontSize="18px" fontWeight="600" color="#333">
-                  Add Counterparty
-                </Text>
-                <Box
-                  as="button"
-                  onClick={cancelAddCounterparty}
-                  cursor="pointer"
-                  color="#666"
-                  _hover={{ color: '#333' }}
-                  fontSize="22px"
-                  lineHeight="1"
-                >
-                  ×
-                </Box>
-              </HStack>
-
-              <Text fontSize="13px" color="#666" mb={1}>
-                Add a new company to the investment threshold assessment.
-              </Text>
-
-              <Box>
-                <Text fontSize="13px" fontWeight="500" color="#333" mb={1.5}>
-                  Counterparty
-                </Text>
-                <Input
-                  placeholder="Type"
-                  value={newCounterparty.name}
-                  onChange={(e) => setNewCounterparty({ ...newCounterparty, name: e.target.value })}
-                  bg="white"
-                  borderColor="#D1D5DB"
-                  _hover={{ borderColor: '#9CA3AF' }}
-                  _focus={{ borderColor: '#227CBF', boxShadow: 'none' }}
-                  borderRadius="6px"
-                  height="38px"
-                  fontSize="14px"
-                />
-              </Box>
-
-              <Box>
-                <Text fontSize="13px" fontWeight="500" color="#333" mb={1.5}>
-                  Sector
-                </Text>
-                <ChakraSelect.Root
-                  collection={sectorCollection}
-                  size="sm"
-                  value={[newCounterparty.sector]}
-                  onValueChange={(e) => setNewCounterparty({ ...newCounterparty, sector: e.value[0] })}
-                >
-                  <ChakraSelect.Trigger
-                    bg="white"
-                    borderColor="#D1D5DB"
-                    _hover={{ borderColor: '#9CA3AF' }}
-                    borderRadius="6px"
-                    height="38px"
-                    fontSize="14px"
-                  >
-                    <ChakraSelect.ValueText placeholder="Select" />
-                    <ChakraSelect.Indicator />
-                  </ChakraSelect.Trigger>
-                  <ChakraSelect.Content
-                    bg="white"
-                    borderRadius="8px"
-                    boxShadow="lg"
-                    zIndex={10000}
-                    position="absolute"
-                  >
-                    {sectorOptions.map((option) => (
-                      <ChakraSelect.Item key={option.value} item={option}>
-                        {option.label}
-                      </ChakraSelect.Item>
-                    ))}
-                  </ChakraSelect.Content>
-                </ChakraSelect.Root>
-              </Box>
-
-              <Box>
-                <Text fontSize="13px" fontWeight="500" color="#333" mb={1.5}>
-                  Description
-                </Text>
-                <Textarea
-                  placeholder="Type"
-                  value={newCounterparty.description}
-                  onChange={(e) => setNewCounterparty({ ...newCounterparty, description: e.target.value })}
-                  bg="white"
-                  borderColor="#D1D5DB"
-                  _hover={{ borderColor: '#9CA3AF' }}
-                  _focus={{ borderColor: '#227CBF', boxShadow: 'none' }}
-                  borderRadius="6px"
-                  height="100px"
-                  fontSize="14px"
-                  resize="vertical"
-                />
-              </Box>
-
-              <HStack gap={2.5} mt={3}>
-                <Button
-                  flex="1"
-                  bg="#E6E7EC"
-                  color="#333"
-                  fontSize="14px"
-                  fontWeight="500"
-                  h="40px"
-                  borderRadius="8px"
-                  _hover={{ bg: '#D1D5DB' }}
-                  onClick={cancelAddCounterparty}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  flex="1"
-                  bg="#47B65C"
-                  color="white"
-                  fontSize="14px"
-                  fontWeight="500"
-                  h="40px"
-                  borderRadius="8px"
-                  _hover={{ bg: '#3DA550' }}
-                  onClick={handleAddCounterparty}
-                >
-                  Add Counterparty
-                </Button>
-              </HStack>
-            </VStack>
-          </Box>
-        </Box>
-      )}
-
-      {/* Edit Counterparty Modal */}
-      {showEditCounterpartyModal && (
-        <Box
-          position="fixed"
-          top="0"
-          left="0"
-          right="0"
-          bottom="0"
-          bg="rgba(0, 0, 0, 0.5)"
-          display="flex"
-          alignItems="center"
-          justifyContent="center"
-          zIndex="9999"
-          onClick={cancelEditCounterparty}
-        >
-          <Box
-            bg="white"
-            borderRadius="12px"
-            p={5}
-            maxW="440px"
-            w="90%"
-            boxShadow="xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <VStack gap={3} align="stretch">
-              <HStack justify="space-between" mb={1}>
-                <Text fontSize="18px" fontWeight="600" color="#333">
-                  Edit Counterparty
-                </Text>
-                <Box
-                  as="button"
-                  onClick={cancelEditCounterparty}
-                  cursor="pointer"
-                  color="#666"
-                  _hover={{ color: '#333' }}
-                  fontSize="22px"
-                  lineHeight="1"
-                >
-                  ×
-                </Box>
-              </HStack>
-
-              <Box>
-                <Text fontSize="13px" fontWeight="500" color="#333" mb={1.5}>
-                  Counterparty
-                </Text>
-                <Input
-                  placeholder="Type"
-                  value={editCounterparty.name}
-                  onChange={(e) => setEditCounterparty({ ...editCounterparty, name: e.target.value })}
-                  bg="white"
-                  borderColor="#D1D5DB"
-                  _hover={{ borderColor: '#9CA3AF' }}
-                  _focus={{ borderColor: '#227CBF', boxShadow: 'none' }}
-                  borderRadius="6px"
-                  height="38px"
-                  fontSize="14px"
-                />
-              </Box>
-
-              <Box>
-                <Text fontSize="13px" fontWeight="500" color="#333" mb={1.5}>
-                  Sector
-                </Text>
-                <ChakraSelect.Root
-                  collection={sectorCollection}
-                  size="sm"
-                  value={[editCounterparty.sector]}
-                  onValueChange={(e) => setEditCounterparty({ ...editCounterparty, sector: e.value[0] })}
-                >
-                  <ChakraSelect.Trigger
-                    bg="white"
-                    borderColor="#D1D5DB"
-                    _hover={{ borderColor: '#9CA3AF' }}
-                    borderRadius="6px"
-                    height="38px"
-                    fontSize="14px"
-                  >
-                    <ChakraSelect.ValueText placeholder="Select" />
-                    <ChakraSelect.Indicator />
-                  </ChakraSelect.Trigger>
-                  <ChakraSelect.Content
-                    bg="white"
-                    borderRadius="8px"
-                    boxShadow="lg"
-                    zIndex={10000}
-                    position="absolute"
-                  >
-                    {sectorOptions.map((option) => (
-                      <ChakraSelect.Item key={option.value} item={option}>
-                        {option.label}
-                      </ChakraSelect.Item>
-                    ))}
-                  </ChakraSelect.Content>
-                </ChakraSelect.Root>
-              </Box>
-
-              <Box>
-                <Text fontSize="13px" fontWeight="500" color="#333" mb={1.5}>
-                  Description
-                </Text>
-                <Textarea
-                  placeholder="Type"
-                  value={editCounterparty.description}
-                  onChange={(e) => setEditCounterparty({ ...editCounterparty, description: e.target.value })}
-                  bg="white"
-                  borderColor="#D1D5DB"
-                  _hover={{ borderColor: '#9CA3AF' }}
-                  _focus={{ borderColor: '#227CBF', boxShadow: 'none' }}
-                  borderRadius="6px"
-                  height="100px"
-                  fontSize="14px"
-                  resize="vertical"
-                />
-              </Box>
-
-              <HStack gap={2.5} mt={3}>
-                <Button
-                  flex="1"
-                  bg="#E6E7EC"
-                  color="#333"
-                  fontSize="14px"
-                  fontWeight="500"
-                  h="40px"
-                  borderRadius="8px"
-                  _hover={{ bg: '#D1D5DB' }}
-                  onClick={cancelEditCounterparty}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  flex="1"
-                  bg="#47B65C"
-                  color="white"
-                  fontSize="14px"
-                  fontWeight="500"
-                  h="40px"
-                  borderRadius="8px"
-                  _hover={{ bg: '#3DA550' }}
-                  onClick={handleUpdateCounterparty}
-                >
-                  Update Counterparty
-                </Button>
-              </HStack>
-            </VStack>
-          </Box>
-        </Box>
-      )}
-
-      {/* Delete Counterparty Confirmation Modal */}
-      {showDeleteCounterpartyModal && (
-        <Box
-          position="fixed"
-          top="0"
-          left="0"
-          right="0"
-          bottom="0"
-          bg="rgba(0, 0, 0, 0.5)"
-          display="flex"
-          alignItems="center"
-          justifyContent="center"
-          zIndex="9999"
-          onClick={cancelDeleteCounterparty}
-        >
-          <Box
-            bg="white"
-            borderRadius="12px"
-            p={6}
-            maxW="400px"
-            w="90%"
-            boxShadow="xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <VStack gap={4} align="stretch">
-              <Text fontSize="20px" fontWeight="600" color="#333" textAlign="center">
-                Delete Counterparty
-              </Text>
-              <Text fontSize="14px" color="#666" textAlign="center">
-                Are you sure you want to delete this counterparty? This action cannot be undone.
-              </Text>
-              <HStack gap={3} mt={2}>
-                <Button
-                  flex="1"
-                  bg="#E6E7EC"
-                  color="#333"
-                  fontSize="14px"
-                  fontWeight="500"
-                  h="42px"
-                  borderRadius="8px"
-                  _hover={{ bg: '#D1D5DB' }}
-                  onClick={cancelDeleteCounterparty}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  flex="1"
-                  bg="#FF6B47"
-                  color="white"
-                  fontSize="14px"
-                  fontWeight="500"
-                  h="42px"
-                  borderRadius="8px"
-                  _hover={{ bg: '#E55529' }}
-                  onClick={confirmDeleteCounterparty}
-                >
-                  Delete
-                </Button>
-              </HStack>
-            </VStack>
-          </Box>
-        </Box>
-      )}
-
-      {/* Add Sector Modal */}
-      {showAddSectorModal && (
-        <Box
-          position="fixed"
-          top="0"
-          left="0"
-          right="0"
-          bottom="0"
-          bg="rgba(0, 0, 0, 0.5)"
-          display="flex"
-          alignItems="center"
-          justifyContent="center"
-          zIndex="9999"
-          onClick={cancelAddSector}
-        >
-          <Box
-            bg="white"
-            borderRadius="12px"
-            p={5}
-            maxW="440px"
-            w="90%"
-            boxShadow="xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <VStack gap={3} align="stretch">
-              <HStack justify="space-between" mb={1}>
-                <Text fontSize="18px" fontWeight="600" color="#333">
-                  Add Sector
-                </Text>
-                <Box
-                  as="button"
-                  onClick={cancelAddSector}
-                  cursor="pointer"
-                  color="#666"
-                  _hover={{ color: '#333' }}
-                  fontSize="22px"
-                  lineHeight="1"
-                >
-                  ×
-                </Box>
-              </HStack>
-
-              <Box>
-                <Text fontSize="13px" fontWeight="500" color="#333" mb={1.5}>
-                  Sector
-                </Text>
-                <Input
-                  placeholder="Type"
-                  value={newSector.name}
-                  onChange={(e) => setNewSector({ ...newSector, name: e.target.value })}
-                  bg="white"
-                  borderColor="#D1D5DB"
-                  _hover={{ borderColor: '#9CA3AF' }}
-                  _focus={{ borderColor: '#227CBF', boxShadow: 'none' }}
-                  borderRadius="6px"
-                  height="38px"
-                  fontSize="14px"
-                />
-              </Box>
-
-              <Box>
-                <Text fontSize="13px" fontWeight="500" color="#333" mb={1.5}>
-                  Description
-                </Text>
-                <Textarea
-                  placeholder="Type"
-                  value={newSector.description}
-                  onChange={(e) => setNewSector({ ...newSector, description: e.target.value })}
-                  bg="white"
-                  borderColor="#D1D5DB"
-                  _hover={{ borderColor: '#9CA3AF' }}
-                  _focus={{ borderColor: '#227CBF', boxShadow: 'none' }}
-                  borderRadius="6px"
-                  height="100px"
-                  fontSize="14px"
-                  resize="vertical"
-                />
-              </Box>
-
-              <HStack gap={2.5} mt={3}>
-                <Button
-                  flex="1"
-                  bg="#E6E7EC"
-                  color="#333"
-                  fontSize="14px"
-                  fontWeight="500"
-                  h="40px"
-                  borderRadius="8px"
-                  _hover={{ bg: '#D1D5DB' }}
-                  onClick={cancelAddSector}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  flex="1"
-                  bg="#47B65C"
-                  color="white"
-                  fontSize="14px"
-                  fontWeight="500"
-                  h="40px"
-                  borderRadius="8px"
-                  _hover={{ bg: '#3DA550' }}
-                  onClick={handleAddSector}
-                >
-                  Add Sector
-                </Button>
-              </HStack>
-            </VStack>
-          </Box>
-        </Box>
-      )}
-
-      {/* Edit Sector Modal */}
-      {showEditSectorModal && (
-        <Box
-          position="fixed"
-          top="0"
-          left="0"
-          right="0"
-          bottom="0"
-          bg="rgba(0, 0, 0, 0.5)"
-          display="flex"
-          alignItems="center"
-          justifyContent="center"
-          zIndex="9999"
-          onClick={cancelEditSector}
-        >
-          <Box
-            bg="white"
-            borderRadius="12px"
-            p={5}
-            maxW="440px"
-            w="90%"
-            boxShadow="xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <VStack gap={3} align="stretch">
-              <HStack justify="space-between" mb={1}>
-                <Text fontSize="18px" fontWeight="600" color="#333">
-                  Edit Sector
-                </Text>
-                <Box
-                  as="button"
-                  onClick={cancelEditSector}
-                  cursor="pointer"
-                  color="#666"
-                  _hover={{ color: '#333' }}
-                  fontSize="22px"
-                  lineHeight="1"
-                >
-                  ×
-                </Box>
-              </HStack>
-
-              <Box>
-                <Text fontSize="13px" fontWeight="500" color="#333" mb={1.5}>
-                  Sector
-                </Text>
-                <Input
-                  placeholder="Type"
-                  value={editSector.name}
-                  onChange={(e) => setEditSector({ ...editSector, name: e.target.value })}
-                  bg="white"
-                  borderColor="#D1D5DB"
-                  _hover={{ borderColor: '#9CA3AF' }}
-                  _focus={{ borderColor: '#227CBF', boxShadow: 'none' }}
-                  borderRadius="6px"
-                  height="38px"
-                  fontSize="14px"
-                />
-              </Box>
-
-              <Box>
-                <Text fontSize="13px" fontWeight="500" color="#333" mb={1.5}>
-                  Description
-                </Text>
-                <Textarea
-                  placeholder="Type"
-                  value={editSector.description}
-                  onChange={(e) => setEditSector({ ...editSector, description: e.target.value })}
-                  bg="white"
-                  borderColor="#D1D5DB"
-                  _hover={{ borderColor: '#9CA3AF' }}
-                  _focus={{ borderColor: '#227CBF', boxShadow: 'none' }}
-                  borderRadius="6px"
-                  height="100px"
-                  fontSize="14px"
-                  resize="vertical"
-                />
-              </Box>
-
-              <HStack gap={2.5} mt={3}>
-                <Button
-                  flex="1"
-                  bg="#E6E7EC"
-                  color="#333"
-                  fontSize="14px"
-                  fontWeight="500"
-                  h="40px"
-                  borderRadius="8px"
-                  _hover={{ bg: '#D1D5DB' }}
-                  onClick={cancelEditSector}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  flex="1"
-                  bg="#47B65C"
-                  color="white"
-                  fontSize="14px"
-                  fontWeight="500"
-                  h="40px"
-                  borderRadius="8px"
-                  _hover={{ bg: '#3DA550' }}
-                  onClick={handleUpdateSector}
-                >
-                  Update Sector
-                </Button>
-              </HStack>
-            </VStack>
-          </Box>
-        </Box>
-      )}
-
-      {/* Delete Sector Confirmation Modal */}
-      {showDeleteSectorModal && (
-        <Box
-          position="fixed"
-          top="0"
-          left="0"
-          right="0"
-          bottom="0"
-          bg="rgba(0, 0, 0, 0.5)"
-          display="flex"
-          alignItems="center"
-          justifyContent="center"
-          zIndex="9999"
-          onClick={cancelDeleteSector}
-        >
-          <Box
-            bg="white"
-            borderRadius="12px"
-            p={6}
-            maxW="400px"
-            w="90%"
-            boxShadow="xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <VStack gap={4} align="stretch">
-              <Text fontSize="20px" fontWeight="600" color="#333" textAlign="center">
-                Delete Sector
-              </Text>
-              <Text fontSize="14px" color="#666" textAlign="center">
-                Are you sure you want to delete this sector? This action cannot be undone.
-              </Text>
-              <HStack gap={3} mt={2}>
-                <Button
-                  flex="1"
-                  bg="#E6E7EC"
-                  color="#333"
-                  fontSize="14px"
-                  fontWeight="500"
-                  h="42px"
-                  borderRadius="8px"
-                  _hover={{ bg: '#D1D5DB' }}
-                  onClick={cancelDeleteSector}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  flex="1"
-                  bg="#FF6B47"
-                  color="white"
-                  fontSize="14px"
-                  fontWeight="500"
-                  h="42px"
-                  borderRadius="8px"
-                  _hover={{ bg: '#E55529' }}
-                  onClick={confirmDeleteSector}
-                >
-                  Delete
-                </Button>
-              </HStack>
-            </VStack>
-          </Box>
-        </Box>
-      )}
     </AdminLayout>
   );
 };

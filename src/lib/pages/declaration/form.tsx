@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Box,
   Heading,
@@ -17,43 +17,19 @@ import {
 import { useRouter } from 'next/navigation';
 import DashboardLayout from '@/lib/layout/DashboardLayout';
 import leftArrow from '@/assets/icons/left-arrow-1.png';
-import { Button } from '@/components/ui';
-
-const companies = [
-  'Access Bank',
-  'Agusto',
-  'Auro',
-  'Bolcom',
-  'Deloitte',
-  'Eko Electricity Distribution',
-  'Environquest',
-  'First Bank',
-  'Fitch',
-  'Gasco Marine',
-  'GCR',
-  'GEL Utility',
-  'Genesis Energy',
-  'GPC',
-  'Green Fuels',
-  'KPMG',
-  'Lagos Free Zone Company',
-  'Leadway Asset Management',
-  'North South Power',
-  'Olaniwun Ajayi',
-  'Prado Power',
-  'Primero',
-  'Stanbic IBTC Asset Management',
-  'Templars',
-  'Tolaram',
-  'Transgrid',
-  'TSL',
-  'Viathan',
-  'WhiteWash',
-  'Zutari',
-];
+import { Button, toaster } from '@/components/ui';
+import { useGetCounterpartiesQuery } from '@/lib/redux/services/counterparty.service';
+import { useSubmitDeclarationMutation } from '@/lib/redux/services/declaration.service';
+import { useGetCurrentUserQuery } from '@/lib/redux/services/auth.service';
+import { useGetUserDeclarationStatusQuery } from '@/lib/redux/services/dashboard.service';
+import { useAppDispatch } from '@/lib/redux/store';
+import { dashboardApi } from '@/lib/redux/services/dashboard.service';
+import type { ICounterparty } from '@/lib/interfaces/counterparty.interfaces';
+import type { IAssessment } from '@/lib/interfaces/declaration.interfaces';
 
 const DeclarationForm = () => {
   const router = useRouter();
+  const dispatch = useAppDispatch();
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState<string>(currentYear.toString());
@@ -61,6 +37,24 @@ const DeclarationForm = () => {
   const [showPolicyViewModal, setShowPolicyViewModal] = useState(false);
   const [isAgreed, setIsAgreed] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+
+  // Get current user from /Users/me endpoint
+  const { data: currentUserData } = useGetCurrentUserQuery();
+  const userId = currentUserData?.data?.id || '';
+
+  // Fetch counterparties from API
+  const { data: counterpartiesData, isLoading: isLoadingCounterparties } = useGetCounterpartiesQuery({
+    page: 1,
+    limit: 100, // Get all counterparties for the form
+  });
+
+  // Submit declaration mutation
+  const [submitDeclaration, { isLoading: isSubmitting }] = useSubmitDeclarationMutation();
+
+  // Get counterparties list
+  const counterparties: ICounterparty[] = useMemo(() => {
+    return counterpartiesData?.data || [];
+  }, [counterpartiesData]);
 
   const yearOptions = [
     { label: currentYear.toString(), value: currentYear.toString() },
@@ -74,11 +68,52 @@ const DeclarationForm = () => {
     itemToValue: (item) => item.value,
   });
 
-  const handleAnswerChange = (companyIndex: number, value: string) => {
+  const handleAnswerChange = (counterpartyId: string, value: string) => {
     setAnswers((prev) => ({
       ...prev,
-      [companyIndex]: value,
+      [counterpartyId]: value,
     }));
+  };
+
+  const handleSubmitDeclaration = async () => {
+    if (!isAgreed) return;
+
+    // Build assessments array from answers
+    const assessments: IAssessment[] = counterparties.map((counterparty) => ({
+      counterpartyId: counterparty.id,
+      hasConflict: answers[counterparty.id] === 'yes',
+      notes: answers[counterparty.id] === 'yes'
+        ? 'Declared conflict of interest'
+        : 'No conflict of interest declared',
+    }));
+
+    const requestBody = {
+      userId,
+      year: parseInt(selectedYear),
+      policyAccepted: true,
+      assessments,
+    };
+
+    try {
+      const result = await submitDeclaration(requestBody).unwrap();
+
+      // Invalidate dashboard cache to refresh the declaration status banner
+      dispatch(dashboardApi.util.invalidateTags(['UserDeclarationStatus', 'DashboardMetrics']));
+
+      toaster.success({
+        title: 'Declaration Submitted',
+        description: result.message || 'Your declaration has been submitted successfully',
+      });
+
+      setShowPolicyModal(false);
+      setShowSuccessModal(true);
+    } catch (error: any) {
+      console.error('Error submitting declaration:', error);
+      toaster.error({
+        title: 'Submission Failed',
+        description: error?.data?.message || 'Failed to submit declaration. Please try again.',
+      });
+    }
   };
 
   return (
@@ -193,69 +228,79 @@ const DeclarationForm = () => {
             Do you or your immediate family have a debt or equity investment in any of these companies?
           </Text>
 
-          <VStack gap={{ base: 7, md: 3, lg: 4 }} align="stretch">
-            {companies.map((company, index) => (
-              <Box
-                key={index}
-                py={{ base: 6, md: 3 }}
-                borderBottom={index < companies.length - 1 ? '1px solid #E8E8E8' : 'none'}
-              >
-                <VStack gap={{ base: 2, md: 2 }} align="stretch" display={{ base: 'flex', md: 'none' }}>
-                  <Text fontSize={{ base: "17px", md: "13px" }} color="#333" fontWeight="500" lineHeight="1.4">
-                    {index + 1}. {company}
-                  </Text>
-                  <RadioGroup.Root
-                    value={answers[index] || ''}
-                    onValueChange={(details) => handleAnswerChange(index, details.value ?? '')}
-                  >
-                    <HStack gap={{ base: 6, md: 6 }} justify="flex-start">
-                      <RadioGroup.Item value="yes">
-                        <RadioGroup.ItemHiddenInput />
-                        <RadioGroup.ItemIndicator />
-                        <RadioGroup.ItemText fontSize={{ base: "17px", md: "13px" }} color="#333">
-                          Yes
-                        </RadioGroup.ItemText>
-                      </RadioGroup.Item>
-                      <RadioGroup.Item value="no">
-                        <RadioGroup.ItemHiddenInput />
-                        <RadioGroup.ItemIndicator />
-                        <RadioGroup.ItemText fontSize={{ base: "17px", md: "13px" }} color="#333">
-                          No
-                        </RadioGroup.ItemText>
-                      </RadioGroup.Item>
-                    </HStack>
-                  </RadioGroup.Root>
-                </VStack>
+          {isLoadingCounterparties ? (
+            <Box textAlign="center" py={8}>
+              <Text color="#666">Loading counterparties...</Text>
+            </Box>
+          ) : counterparties.length === 0 ? (
+            <Box textAlign="center" py={8}>
+              <Text color="#666">No counterparties found.</Text>
+            </Box>
+          ) : (
+            <VStack gap={{ base: 7, md: 3, lg: 4 }} align="stretch">
+              {counterparties.map((counterparty, index) => (
+                <Box
+                  key={counterparty.id}
+                  py={{ base: 6, md: 3 }}
+                  borderBottom={index < counterparties.length - 1 ? '1px solid #E8E8E8' : 'none'}
+                >
+                  <VStack gap={{ base: 2, md: 2 }} align="stretch" display={{ base: 'flex', md: 'none' }}>
+                    <Text fontSize={{ base: "17px", md: "13px" }} color="#333" fontWeight="500" lineHeight="1.4">
+                      {index + 1}. {counterparty.name}
+                    </Text>
+                    <RadioGroup.Root
+                      value={answers[counterparty.id] || ''}
+                      onValueChange={(details) => handleAnswerChange(counterparty.id, details.value ?? '')}
+                    >
+                      <HStack gap={{ base: 6, md: 6 }} justify="flex-start">
+                        <RadioGroup.Item value="yes">
+                          <RadioGroup.ItemHiddenInput />
+                          <RadioGroup.ItemIndicator />
+                          <RadioGroup.ItemText fontSize={{ base: "17px", md: "13px" }} color="#333">
+                            Yes
+                          </RadioGroup.ItemText>
+                        </RadioGroup.Item>
+                        <RadioGroup.Item value="no">
+                          <RadioGroup.ItemHiddenInput />
+                          <RadioGroup.ItemIndicator />
+                          <RadioGroup.ItemText fontSize={{ base: "17px", md: "13px" }} color="#333">
+                            No
+                          </RadioGroup.ItemText>
+                        </RadioGroup.Item>
+                      </HStack>
+                    </RadioGroup.Root>
+                  </VStack>
 
-                <HStack justify="space-between" display={{ base: 'none', md: 'flex' }}>
-                  <Text fontSize="13px" color="#333" fontWeight="500">
-                    {index + 1}. {company}
-                  </Text>
-                  <RadioGroup.Root
-                    value={answers[index] || ''}
-                    onValueChange={(details) => handleAnswerChange(index, details.value ?? '')}
-                  >
-                    <HStack gap={6}>
-                      <RadioGroup.Item value="yes">
-                        <RadioGroup.ItemHiddenInput />
-                        <RadioGroup.ItemIndicator />
-                        <RadioGroup.ItemText fontSize="13px" color="#333">
-                          Yes
-                        </RadioGroup.ItemText>
-                      </RadioGroup.Item>
-                      <RadioGroup.Item value="no">
-                        <RadioGroup.ItemHiddenInput />
-                        <RadioGroup.ItemIndicator />
-                        <RadioGroup.ItemText fontSize="13px" color="#333">
-                          No
-                        </RadioGroup.ItemText>
-                      </RadioGroup.Item>
-                    </HStack>
-                  </RadioGroup.Root>
-                </HStack>
-              </Box>
-            ))}
-          </VStack>
+                  <HStack justify="space-between" display={{ base: 'none', md: 'flex' }}>
+                    <Text fontSize="13px" color="#333" fontWeight="500">
+                      {index + 1}. {counterparty.name}
+                    </Text>
+                    <RadioGroup.Root
+                      value={answers[counterparty.id] || ''}
+                      onValueChange={(details) => handleAnswerChange(counterparty.id, details.value ?? '')}
+                    >
+                      <HStack gap={6}>
+                        <RadioGroup.Item value="yes">
+                          <RadioGroup.ItemHiddenInput />
+                          <RadioGroup.ItemIndicator />
+                          <RadioGroup.ItemText fontSize="13px" color="#333">
+                            Yes
+                          </RadioGroup.ItemText>
+                        </RadioGroup.Item>
+                        <RadioGroup.Item value="no">
+                          <RadioGroup.ItemHiddenInput />
+                          <RadioGroup.ItemIndicator />
+                          <RadioGroup.ItemText fontSize="13px" color="#333">
+                            No
+                          </RadioGroup.ItemText>
+                        </RadioGroup.Item>
+                      </HStack>
+                    </RadioGroup.Root>
+                  </HStack>
+                </Box>
+              ))}
+            </VStack>
+          )}
         </Box>
 
         {/* Next Button */}
@@ -271,12 +316,11 @@ const DeclarationForm = () => {
             w={{ base: '100%', md: 'auto' }}
             borderRadius="6px"
             _hover={{ bg: '#3DA550' }}
-            disabled={Object.keys(answers).length < companies.length}
-            opacity={Object.keys(answers).length < companies.length ? 0.5 : 1}
-            cursor={Object.keys(answers).length < companies.length ? 'not-allowed' : 'pointer'}
+            disabled={Object.keys(answers).length < counterparties.length || isLoadingCounterparties}
+            opacity={Object.keys(answers).length < counterparties.length || isLoadingCounterparties ? 0.5 : 1}
+            cursor={Object.keys(answers).length < counterparties.length || isLoadingCounterparties ? 'not-allowed' : 'pointer'}
             onClick={() => {
-              if (Object.keys(answers).length === companies.length) {
-                console.log('Form submitted', answers);
+              if (Object.keys(answers).length === counterparties.length && !isLoadingCounterparties) {
                 setShowPolicyModal(true);
               }
             }}
@@ -417,17 +461,13 @@ const DeclarationForm = () => {
                   h={{ base: '42px', md: '40px' }}
                   borderRadius="6px"
                   _hover={{ bg: '#3DA550' }}
-                  disabled={!isAgreed}
-                  opacity={!isAgreed ? 0.5 : 1}
-                  cursor={!isAgreed ? 'not-allowed' : 'pointer'}
-                  onClick={() => {
-                    if (isAgreed) {
-                      console.log('Policy agreed and submitted');
-                      setShowSuccessModal(true);
-                    }
-                  }}
+                  disabled={!isAgreed || isSubmitting}
+                  opacity={!isAgreed || isSubmitting ? 0.5 : 1}
+                  cursor={!isAgreed || isSubmitting ? 'not-allowed' : 'pointer'}
+                  onClick={handleSubmitDeclaration}
+                  loading={isSubmitting}
                 >
-                  Submit
+                  {isSubmitting ? 'Submitting...' : 'Submit'}
                 </Button>
               </Box>
             </VStack>

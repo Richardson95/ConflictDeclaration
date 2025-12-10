@@ -19,53 +19,7 @@ import DashboardLayout from '@/lib/layout/DashboardLayout';
 import leftArrow from '@/assets/icons/left-arrow-1.png';
 import { LuDownload } from 'react-icons/lu';
 import infraCreditLogo from '@/assets/logos/logo-1.png';
-
-// Mock data for declaration check history - showing conflict checks performed
-const generateRandomDate = (index: number) => {
-  const months = ['January', 'February', 'March', 'April', 'May', 'June',
-                  'July', 'August', 'September', 'October', 'November', 'December'];
-  const year = 2025;
-  const monthIndex = Math.floor((index * 3) % 12); // Distribute across months
-  const day = ((index * 7) % 28) + 1; // Days 1-28 to avoid invalid dates
-
-  return `${day} ${months[monthIndex]}, ${year}`;
-};
-
-const mockCheckHistory = Array(50).fill(null).map((_, index) => {
-  const counterparties = [
-    'Access Bank', 'Agusto', 'Auro', 'Deloitte', 'KPMG',
-    'First Bank', 'Stanbic IBTC Asset Management', 'Leadway Asset Management',
-    'Templars', 'KPMG', 'Bolcom', 'Fitch'
-  ];
-
-  const sectors = [
-    'Banking', 'Credit Rating', 'Technology', 'Professional Services',
-    'Asset Management', 'Legal Services', 'Consulting'
-  ];
-
-  const counterparty = counterparties[index % counterparties.length];
-  const sectorMap: Record<string, string> = {
-    'Access Bank': 'Banking',
-    'First Bank': 'Banking',
-    'Agusto': 'Credit Rating',
-    'Fitch': 'Credit Rating',
-    'Auro': 'Technology',
-    'Deloitte': 'Professional Services',
-    'KPMG': 'Professional Services',
-    'Bolcom': 'Technology',
-    'Stanbic IBTC Asset Management': 'Asset Management',
-    'Leadway Asset Management': 'Asset Management',
-    'Templars': 'Legal Services',
-  };
-
-  return {
-    id: index + 1,
-    counterparty,
-    sector: sectorMap[counterparty] || sectors[index % sectors.length],
-    date: generateRandomDate(index),
-    hasConflict: index % 3 === 0, // Some have conflicts
-  };
-});
+import { useGetConflictCheckHistoryDetailQuery } from '@/lib/redux/services/counterparty.service';
 
 const DeclarationCheckHistory = () => {
   const router = useRouter();
@@ -75,23 +29,32 @@ const DeclarationCheckHistory = () => {
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [showCertificateModal, setShowCertificateModal] = useState(false);
-  const [selectedItem, setSelectedItem] = useState<typeof mockCheckHistory[0] | null>(null);
+  const [selectedItem, setSelectedItem] = useState<any>(null);
 
-  const handleViewCertificate = useCallback((item: typeof mockCheckHistory[0]) => {
+  // Fetch conflict check history from API
+  const { data, isLoading, error } = useGetConflictCheckHistoryDetailQuery({
+    page: 1,
+    limit: 100, // Get all checks for the year
+    year: parseInt(selectedYear),
+  });
+
+  const checkHistory = data?.data?.result || [];
+
+  const handleViewCertificate = useCallback((item: any) => {
     setSelectedItem(item);
     setShowCertificateModal(true);
   }, []);
 
   const handleDownloadReport = () => {
     if (selectedItem) {
-      console.log('Downloading report for:', selectedItem.counterparty);
-      alert(`Downloading report for ${selectedItem.counterparty}`);
+      console.log('Downloading report for:', selectedItem.counterpartyName || selectedItem.counterparty);
+      alert(`Downloading report for ${selectedItem.counterpartyName || selectedItem.counterparty}`);
     }
   };
 
   const handleNotifyCompliance = () => {
     if (selectedItem) {
-      console.log('Notifying compliance for:', selectedItem.counterparty);
+      console.log('Notifying compliance for:', selectedItem.counterpartyName || selectedItem.counterparty);
     }
   };
 
@@ -108,11 +71,13 @@ const DeclarationCheckHistory = () => {
   });
 
   // Filter by search query
-  const filteredData = useMemo(() =>
-    mockCheckHistory.filter((item) =>
-      item.counterparty.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.sector.toLowerCase().includes(searchQuery.toLowerCase())
-    ), [searchQuery]);
+  const filteredData = useMemo(() => {
+    if (!checkHistory || !Array.isArray(checkHistory)) return [];
+    return checkHistory.filter((item: any) =>
+      (item.counterpartyName || item.counterparty || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (item.sector || '').toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [checkHistory, searchQuery]);
 
   const totalPages = useMemo(() => Math.ceil(filteredData.length / itemsPerPage), [filteredData.length, itemsPerPage]);
   const startIndex = (currentPage - 1) * itemsPerPage;
@@ -363,109 +328,157 @@ const DeclarationCheckHistory = () => {
           </Box>
 
           {/* Table Rows */}
-          <VStack gap={2} align="stretch">
-            {paginatedData.map((item, index) => (
-              <Box
-                key={item.id}
-                bg="white"
-                borderRadius="8px"
-                px={6}
-                py={3.5}
-                boxShadow="sm"
-                _hover={{ bg: '#F8F9FA' }}
-              >
-                <HStack gap={0}>
-                  <Box w="60px">
-                    <Text fontSize="14px" color="#333">
-                      {startIndex + index + 1}
-                    </Text>
+          {isLoading ? (
+            <Box textAlign="center" py={8}>
+              <Text color="#666">Loading conflict check history...</Text>
+            </Box>
+          ) : error ? (
+            <Box textAlign="center" py={8}>
+              <Text color="red.500">Error loading conflict check history. Please try again.</Text>
+            </Box>
+          ) : paginatedData.length === 0 ? (
+            <Box textAlign="center" py={8}>
+              <Text color="#666">No conflict checks found for {selectedYear}.</Text>
+            </Box>
+          ) : (
+            <VStack gap={2} align="stretch">
+              {paginatedData.map((item: any, index) => {
+                const formattedDate = item.date || item.checkDetail?.checkedAt || item.checkedAt
+                  ? new Date(item.date || item.checkDetail?.checkedAt || item.checkedAt).toLocaleDateString('en-US', {
+                      day: '2-digit',
+                      month: 'long',
+                      year: 'numeric',
+                    })
+                  : '';
+
+                return (
+                  <Box
+                    key={item.id || item.checkId || index}
+                    bg="white"
+                    borderRadius="8px"
+                    px={6}
+                    py={3.5}
+                    boxShadow="sm"
+                    _hover={{ bg: '#F8F9FA' }}
+                  >
+                    <HStack gap={0}>
+                      <Box w="60px">
+                        <Text fontSize="14px" color="#333">
+                          {startIndex + index + 1}
+                        </Text>
+                      </Box>
+                      <Box w="300px" pl={4}>
+                        <Text fontSize="14px" color="#333">
+                          {item.counterpartyName || item.counterparty || 'Unknown'}
+                        </Text>
+                      </Box>
+                      <Box flex="1" pl={4}>
+                        <Text fontSize="14px" color="#333">
+                          {item.sector || 'N/A'}
+                        </Text>
+                      </Box>
+                      <Box w="200px" transform="translateX(-60px)">
+                        <Text fontSize="14px" color="#333">
+                          {formattedDate}
+                        </Text>
+                      </Box>
+                      <Box w="160px" textAlign="center">
+                        <ChakraButton
+                          bg="#227CBF"
+                          color="white"
+                          fontSize="13px"
+                          fontWeight="500"
+                          px={4}
+                          h="36px"
+                          borderRadius="6px"
+                          _hover={{ bg: '#1B6AA3' }}
+                          onClick={() => handleViewCertificate(item)}
+                        >
+                          View Certificate
+                        </ChakraButton>
+                      </Box>
+                    </HStack>
                   </Box>
-                  <Box w="300px" pl={4}>
-                    <Text fontSize="14px" color="#333">
-                      {item.counterparty}
-                    </Text>
-                  </Box>
-                  <Box flex="1" pl={4}>
-                    <Text fontSize="14px" color="#333">
-                      {item.sector}
-                    </Text>
-                  </Box>
-                  <Box w="200px" transform="translateX(-60px)">
-                    <Text fontSize="14px" color="#333">
-                      {item.date}
-                    </Text>
-                  </Box>
-                  <Box w="160px" textAlign="center">
-                    <ChakraButton
-                      bg="#227CBF"
-                      color="white"
-                      fontSize="13px"
-                      fontWeight="500"
-                      px={4}
-                      h="36px"
-                      borderRadius="6px"
-                      _hover={{ bg: '#1B6AA3' }}
-                      onClick={() => handleViewCertificate(item)}
-                    >
-                      View Certificate
-                    </ChakraButton>
-                  </Box>
-                </HStack>
-              </Box>
-            ))}
-          </VStack>
+                );
+              })}
+            </VStack>
+          )}
         </Box>
 
         {/* Mobile Card View */}
         <VStack gap={7} align="stretch" display={{ base: "flex", lg: "none" }}>
-          {paginatedData.map((item, index) => (
-            <Box
-              key={item.id}
-              bg="transparent"
-              borderRadius="none"
-              p={0}
-              boxShadow="none"
-            >
-              <VStack align="stretch" gap={6}>
-                <HStack justify="space-between" pb={4} borderBottom="1px solid #E0E0E0">
-                  <Text fontSize="15px" color="#333" fontWeight="500">#{startIndex + index + 1}</Text>
-                  <Text fontSize="14px" color="#333" fontWeight="500">ID: {item.id}</Text>
-                </HStack>
-
-                <VStack align="stretch" gap={5}>
-                  <Box>
-                    <Text fontSize="14px" color="#333" mb={2}>Counterparty</Text>
-                    <Text fontSize="18px" color="#333" fontWeight="600">{item.counterparty}</Text>
-                  </Box>
-
-                  <Box>
-                    <Text fontSize="14px" color="#333" mb={2}>Sector</Text>
-                    <Text fontSize="17px" color="#333">{item.sector}</Text>
-                  </Box>
-
-                  <Box>
-                    <Text fontSize="14px" color="#333" mb={2}>Date Checked</Text>
-                    <Text fontSize="16px" color="#333" fontWeight="500">{item.date}</Text>
-                  </Box>
-                </VStack>
-
-                <ChakraButton
-                  bg="#227CBF"
-                  color="white"
-                  fontSize="17px"
-                  fontWeight="500"
-                  w="100%"
-                  h="52px"
-                  borderRadius="12px"
-                  _hover={{ bg: '#1B6AA3' }}
-                  _active={{ bg: '#165A8C' }}
-                  onClick={() => handleViewCertificate(item)}
-                >
-                  View Certificate
-                </ChakraButton>
-              </VStack>
+          {isLoading ? (
+            <Box textAlign="center" py={8}>
+              <Text color="#666">Loading conflict check history...</Text>
             </Box>
-          ))}
+          ) : error ? (
+            <Box textAlign="center" py={8}>
+              <Text color="red.500">Error loading conflict check history. Please try again.</Text>
+            </Box>
+          ) : paginatedData.length === 0 ? (
+            <Box textAlign="center" py={8}>
+              <Text color="#666">No conflict checks found for {selectedYear}.</Text>
+            </Box>
+          ) : (
+            paginatedData.map((item: any, index) => {
+              const formattedDate = item.date || item.checkDetail?.checkedAt || item.checkedAt
+                ? new Date(item.date || item.checkDetail?.checkedAt || item.checkedAt).toLocaleDateString('en-US', {
+                    day: '2-digit',
+                    month: 'long',
+                    year: 'numeric',
+                  })
+                : '';
+
+              return (
+                <Box
+                  key={item.id || item.checkId || index}
+                  bg="transparent"
+                  borderRadius="none"
+                  p={0}
+                  boxShadow="none"
+                >
+                  <VStack align="stretch" gap={6}>
+                    <HStack justify="space-between" pb={4} borderBottom="1px solid #E0E0E0">
+                      <Text fontSize="15px" color="#333" fontWeight="500">#{startIndex + index + 1}</Text>
+                      <Text fontSize="14px" color="#333" fontWeight="500">ID: {item.id || item.checkId || index}</Text>
+                    </HStack>
+
+                    <VStack align="stretch" gap={5}>
+                      <Box>
+                        <Text fontSize="14px" color="#333" mb={2}>Counterparty</Text>
+                        <Text fontSize="18px" color="#333" fontWeight="600">{item.counterpartyName || item.counterparty || 'Unknown'}</Text>
+                      </Box>
+
+                      <Box>
+                        <Text fontSize="14px" color="#333" mb={2}>Sector</Text>
+                        <Text fontSize="17px" color="#333">{item.sector || 'N/A'}</Text>
+                      </Box>
+
+                      <Box>
+                        <Text fontSize="14px" color="#333" mb={2}>Date Checked</Text>
+                        <Text fontSize="16px" color="#333" fontWeight="500">{formattedDate}</Text>
+                      </Box>
+                    </VStack>
+
+                    <ChakraButton
+                      bg="#227CBF"
+                      color="white"
+                      fontSize="17px"
+                      fontWeight="500"
+                      w="100%"
+                      h="52px"
+                      borderRadius="12px"
+                      _hover={{ bg: '#1B6AA3' }}
+                      _active={{ bg: '#165A8C' }}
+                      onClick={() => handleViewCertificate(item)}
+                    >
+                      View Certificate
+                    </ChakraButton>
+                  </VStack>
+                </Box>
+              );
+            })
+          )}
         </VStack>
 
         {/* Pagination */}
@@ -713,12 +726,12 @@ const DeclarationCheckHistory = () => {
 
               {/* Counterparty Name */}
               <Heading fontSize={{ base: '15px', md: '17px', lg: '18px' }} fontWeight="600" color="#2E7BB4" textAlign="center">
-                {selectedItem.counterparty}
+                {selectedItem.counterparty || selectedItem.checkDetail?.counterparty?.name}
               </Heading>
 
               {/* Conflict Status */}
               <Box textAlign="center">
-                {selectedItem.hasConflict ? (
+                {(selectedItem.checkDetail?.hasConflict || selectedItem.hasConflict) ? (
                   <Box
                     bg="#FF6B47"
                     color="white"
@@ -750,10 +763,25 @@ const DeclarationCheckHistory = () => {
               {/* Checked By Info */}
               <VStack gap={0.5}>
                 <Text fontSize={{ base: '12px', md: '13px' }} color="#666" textAlign="center">
-                  Checked by: <Text as="span" color="#333" fontWeight="500">Tunde Bakare</Text>
+                  Checked by: <Text as="span" color="#333" fontWeight="500">
+                    {selectedItem.checkDetail?.checkedByFullName || selectedItem.userFullName || 'Unknown'}
+                  </Text>
                 </Text>
                 <Text fontSize={{ base: '12px', md: '13px' }} color="#666" textAlign="center">
-                  Date/Time: <Text as="span" color="#333" fontWeight="500">7th July, 2025; 11:25pm</Text>
+                  Date/Time: <Text as="span" color="#333" fontWeight="500">
+                    {(() => {
+                      const date = new Date(selectedItem.checkDetail?.checkedAt || selectedItem.date);
+                      // Backend times are already in Nigeria time, display as-is
+                      return date.toLocaleString('en-US', {
+                        day: 'numeric',
+                        month: 'long',
+                        year: 'numeric',
+                        hour: 'numeric',
+                        minute: '2-digit',
+                        hour12: true
+                      }).replace(/,/g, ' at');
+                    })()}
+                  </Text>
                 </Text>
               </VStack>
 

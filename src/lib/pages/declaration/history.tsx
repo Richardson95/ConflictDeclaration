@@ -17,22 +17,9 @@ import {
 import { useRouter } from 'next/navigation';
 import DashboardLayout from '@/lib/layout/DashboardLayout';
 import leftArrow from '@/assets/icons/left-arrow-1.png';
-
-// Mock data for declaration history with varied dates
-const generateRandomDate = (index: number) => {
-  const months = ['January', 'February', 'March', 'April', 'May', 'June',
-                  'July', 'August', 'September', 'October', 'November', 'December'];
-  const year = 2024;
-  const monthIndex = Math.floor((index * 7) % 12); // Distribute across months
-  const day = ((index * 13) % 28) + 1; // Days 1-28 to avoid invalid dates
-
-  return `${day} ${months[monthIndex]}, ${year}`;
-};
-
-const mockDeclarations = Array(512).fill(null).map((_, index) => ({
-  id: index + 1,
-  date: generateRandomDate(index),
-}));
+import { useGetDeclarationHistoryWithCounterpartiesQuery } from '@/lib/redux/services/declaration.service';
+import { useGetCurrentUserQuery } from '@/lib/redux/services/auth.service';
+import type { IDeclarationWithCounterparties } from '@/lib/interfaces/declaration.interfaces';
 
 const DeclarationHistory = () => {
   const router = useRouter();
@@ -42,6 +29,28 @@ const DeclarationHistory = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [dateSearch, setDateSearch] = useState<string>('');
+
+  // Get current user from /Users/me endpoint
+  const { data: currentUserData, isLoading: isLoadingUser } = useGetCurrentUserQuery();
+  const userId = currentUserData?.data?.id || '';
+
+  // Fetch declaration history from API
+  const { data, isLoading: isLoadingHistory, error } = useGetDeclarationHistoryWithCounterpartiesQuery({
+    userId,
+    page: currentPage,
+    pageSize: itemsPerPage,
+  }, {
+    skip: !userId, // Skip the query if userId is not available
+  });
+
+  const isLoading = isLoadingUser || isLoadingHistory;
+
+  const declarations: IDeclarationWithCounterparties[] = useMemo(() => {
+    return data?.data.result || [];
+  }, [data]);
+
+  const totalRecords = data?.data.totalRecords || 0;
+  const totalPages = data?.data.totalPages || 1;
 
   const yearOptions = [
     { label: currentYear.toString(), value: currentYear.toString() },
@@ -66,15 +75,16 @@ const DeclarationHistory = () => {
     itemToValue: (item) => item.value,
   });
 
-  // Filter declarations by date search
-  const filteredDeclarations = useMemo(() =>
-    mockDeclarations.filter((declaration) =>
-      declaration.date.toLowerCase().includes(dateSearch.toLowerCase())
-    ), [dateSearch]);
-
-  const totalPages = useMemo(() => Math.ceil(filteredDeclarations.length / itemsPerPage), [filteredDeclarations.length, itemsPerPage]);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedData = useMemo(() => filteredDeclarations.slice(startIndex, startIndex + itemsPerPage), [filteredDeclarations, startIndex, itemsPerPage]);
+  // Format date for display
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const options: Intl.DateTimeFormatOptions = {
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric'
+    };
+    return date.toLocaleDateString('en-US', options);
+  };
 
   const renderPageNumbers = useMemo(() => {
     const pages = [];
@@ -290,43 +300,96 @@ const DeclarationHistory = () => {
               <Box w="200px" textAlign="right"><Text color="#2E7BB4" fontWeight="600" fontSize="13px">Action</Text></Box>
             </HStack>
           </Box>
-          <VStack gap={2} align="stretch">
-            {paginatedData.map((item) => (
-              <Box key={item.id} bg="white" borderRadius="8px" px={6} py={3.5} boxShadow="sm" _hover={{ bg: '#F8F9FA' }}>
-                <HStack gap={0}>
-                  <Box w="80px"><Text fontSize="14px" color="#333">{item.id}</Text></Box>
-                  <Box flex="1" textAlign="center"><Text fontSize="14px" color="#333">{item.date}</Text></Box>
-                  <Box w="200px" textAlign="right">
-                    <ChakraButton bg="#227CBF" color="white" fontSize="13px" fontWeight="500" px={5} h="36px" borderRadius="6px" _hover={{ bg: '#1B6AA3' }} onClick={() => router.push(`/declaration/view?date=${encodeURIComponent(item.date)}`)}>View Declaration</ChakraButton>
-                  </Box>
-                </HStack>
-              </Box>
-            ))}
-          </VStack>
+          {isLoading ? (
+            <Box textAlign="center" py={8}>
+              <Text color="#666">Loading declaration history...</Text>
+            </Box>
+          ) : error ? (
+            <Box textAlign="center" py={8}>
+              <Text color="red.500">Error loading declarations. Please try again.</Text>
+            </Box>
+          ) : declarations.length === 0 ? (
+            <Box textAlign="center" py={8}>
+              <Text color="#666">No declarations found.</Text>
+            </Box>
+          ) : (
+            <VStack gap={2} align="stretch">
+              {declarations.map((item) => (
+                <Box key={item.declarationId} bg="white" borderRadius="8px" px={6} py={3.5} boxShadow="sm" _hover={{ bg: '#F8F9FA' }}>
+                  <HStack gap={0}>
+                    <Box w="80px"><Text fontSize="14px" color="#333">{item.serialNumber}</Text></Box>
+                    <Box flex="1" textAlign="center"><Text fontSize="14px" color="#333">{formatDate(item.submittedAt)}</Text></Box>
+                    <Box w="200px" textAlign="right">
+                      <ChakraButton
+                        bg="#227CBF"
+                        color="white"
+                        fontSize="13px"
+                        fontWeight="500"
+                        px={5}
+                        h="36px"
+                        borderRadius="6px"
+                        _hover={{ bg: '#1B6AA3' }}
+                        onClick={() => router.push(`/declaration/view?id=${item.declarationId}`)}
+                      >
+                        View Declaration
+                      </ChakraButton>
+                    </Box>
+                  </HStack>
+                </Box>
+              ))}
+            </VStack>
+          )}
         </Box>
 
         {/* Mobile Card View */}
         <VStack gap={8} align="stretch" display={{ base: 'flex', md: 'none' }}>
-          {paginatedData.map((item, index) => (
-            <Box key={item.id} bg="transparent" borderRadius="none" p={0} boxShadow="none">
-              <VStack align="stretch" gap={6}>
-                <VStack align="stretch" gap={3} bg="#F8FAFC" p={4} borderRadius="8px" borderLeft="3px solid #227CBF">
-                  <HStack justify="space-between">
-                    <Text fontSize="13px" color="#666" fontWeight="500">Serial Number</Text>
-                    <Text fontSize="15px" color="#333" fontWeight="600">{item.id}</Text>
-                  </HStack>
-                  <HStack justify="space-between">
-                    <Text fontSize="13px" color="#666" fontWeight="500">Declaration Date</Text>
-                    <Text fontSize="15px" color="#2E7BB4" fontWeight="600">{item.date}</Text>
-                  </HStack>
-                </VStack>
-                <ChakraButton bg="#227CBF" color="white" fontSize="17px" fontWeight="500" w="100%" h="54px" borderRadius="10px" _hover={{ bg: '#1B6AA3' }} _active={{ bg: '#165A8C' }} onClick={() => router.push(`/declaration/view?date=${encodeURIComponent(item.date)}`)}>View Declaration</ChakraButton>
-              </VStack>
-              {index < paginatedData.length - 1 && (
-                <Box h="1px" bg="#D1D5DB" mt={8} />
-              )}
+          {isLoading ? (
+            <Box textAlign="center" py={8}>
+              <Text color="#666">Loading declaration history...</Text>
             </Box>
-          ))}
+          ) : error ? (
+            <Box textAlign="center" py={8}>
+              <Text color="red.500">Error loading declarations. Please try again.</Text>
+            </Box>
+          ) : declarations.length === 0 ? (
+            <Box textAlign="center" py={8}>
+              <Text color="#666">No declarations found.</Text>
+            </Box>
+          ) : (
+            declarations.map((item, index) => (
+              <Box key={item.declarationId} bg="transparent" borderRadius="none" p={0} boxShadow="none">
+                <VStack align="stretch" gap={6}>
+                  <VStack align="stretch" gap={3} bg="#F8FAFC" p={4} borderRadius="8px" borderLeft="3px solid #227CBF">
+                    <HStack justify="space-between">
+                      <Text fontSize="13px" color="#666" fontWeight="500">Serial Number</Text>
+                      <Text fontSize="15px" color="#333" fontWeight="600">{item.serialNumber}</Text>
+                    </HStack>
+                    <HStack justify="space-between">
+                      <Text fontSize="13px" color="#666" fontWeight="500">Declaration Date</Text>
+                      <Text fontSize="15px" color="#2E7BB4" fontWeight="600">{formatDate(item.submittedAt)}</Text>
+                    </HStack>
+                  </VStack>
+                  <ChakraButton
+                    bg="#227CBF"
+                    color="white"
+                    fontSize="17px"
+                    fontWeight="500"
+                    w="100%"
+                    h="54px"
+                    borderRadius="10px"
+                    _hover={{ bg: '#1B6AA3' }}
+                    _active={{ bg: '#165A8C' }}
+                    onClick={() => router.push(`/declaration/view?id=${item.declarationId}`)}
+                  >
+                    View Declaration
+                  </ChakraButton>
+                </VStack>
+                {index < declarations.length - 1 && (
+                  <Box h="1px" bg="#D1D5DB" mt={8} />
+                )}
+              </Box>
+            ))
+          )}
         </VStack>
 
         {/* Pagination */}
@@ -355,7 +418,7 @@ const DeclarationHistory = () => {
                 <option value={20}>20</option>
                 <option value={50}>50</option>
               </select>
-              <Text fontWeight="400">of {filteredDeclarations.length}</Text>
+              <Text fontWeight="400">of {totalRecords}</Text>
             </HStack>
 
             <HStack gap={2} justify="center">
@@ -466,7 +529,7 @@ const DeclarationHistory = () => {
                 <option value={20}>20</option>
                 <option value={50}>50</option>
               </select>
-              <Text fontWeight="400">out of {filteredDeclarations.length}</Text>
+              <Text fontWeight="400">out of {totalRecords}</Text>
             </HStack>
 
             <HStack gap={2}>

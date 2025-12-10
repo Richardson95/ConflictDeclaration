@@ -14,38 +14,53 @@ import {
 import { Button } from '@/components/ui';
 import { LuHistory, LuDownload } from 'react-icons/lu';
 import Link from 'next/link';
-
-// Mock data - replace with actual data from API
-const baseCounterparties = [
-  { name: 'Access Bank', sector: 'Banking', hasConflict: false },
-  { name: 'Agusto', sector: 'Credit Rating', hasConflict: true },
-  { name: 'Auro', sector: 'Technology', hasConflict: false },
-  { name: 'Deloitte', sector: 'Professional Services', hasConflict: true },
-  { name: 'KPMG', sector: 'Professional Services', hasConflict: false },
-  { name: 'First Bank', sector: 'Banking', hasConflict: false },
-  { name: 'Stanbic IBTC', sector: 'Banking', hasConflict: true },
-  { name: 'Fitch', sector: 'Credit Rating', hasConflict: false },
-  { name: 'PwC', sector: 'Professional Services', hasConflict: true },
-  { name: 'EY', sector: 'Professional Services', hasConflict: false },
-  { name: 'GTBank', sector: 'Banking', hasConflict: false },
-  { name: 'Zenith Bank', sector: 'Banking', hasConflict: true },
-];
-
-const mockCounterparties = Array(50).fill(null).map((_, index) => ({
-  id: index + 1,
-  name: baseCounterparties[index % baseCounterparties.length].name,
-  sector: baseCounterparties[index % baseCounterparties.length].sector,
-  hasConflict: baseCounterparties[index % baseCounterparties.length].hasConflict,
-}));
+import { useRouter } from 'next/navigation';
+import { useGetCounterpartiesQuery, useCheckConflictMutation } from '@/lib/redux/services/counterparty.service';
+import { useGetUserDeclarationStatusQuery } from '@/lib/redux/services/dashboard.service';
+import type { ICounterparty, IConflictCheckResponse } from '@/lib/interfaces/counterparty.interfaces';
 
 const Dashboard = () => {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [isDisclaimerOpen, setIsDisclaimerOpen] = useState(false);
-  const [selectedCounterparty, setSelectedCounterparty] = useState<typeof mockCounterparties[0] | null>(null);
+  const [selectedCounterparty, setSelectedCounterparty] = useState<ICounterparty | null>(null);
   const [showStatement, setShowStatement] = useState(false);
   const [notificationSent, setNotificationSent] = useState(false);
+  const [conflictCheckResult, setConflictCheckResult] = useState<IConflictCheckResponse | null>(null);
+  const [bannerDismissed, setBannerDismissed] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+
+  // Fetch counterparties from API
+  const { data, isLoading, error } = useGetCounterpartiesQuery({
+    page: currentPage,
+    limit: itemsPerPage,
+    filters: searchQuery ? { searchTerm: searchQuery } : undefined,
+  });
+
+  // Fetch user declaration status
+  const { data: declarationStatusData } = useGetUserDeclarationStatusQuery();
+
+  // Check conflict mutation
+  const [checkConflict, { isLoading: isCheckingConflict }] = useCheckConflictMutation();
+
+  const handleCheckConflict = useCallback(async () => {
+    if (selectedCounterparty) {
+      try {
+        setIsDisclaimerOpen(false);
+        const result = await checkConflict({
+          counterpartyId: selectedCounterparty.id,
+        }).unwrap();
+
+        setConflictCheckResult(result.data);
+        setShowStatement(true);
+      } catch (error) {
+        console.error('Error checking conflict:', error);
+        // Handle error - could show a toast notification
+      }
+    }
+  }, [selectedCounterparty, checkConflict]);
 
   const handleNotifyCompliance = useCallback(() => {
     if (selectedCounterparty) {
@@ -54,17 +69,138 @@ const Dashboard = () => {
     }
   }, [selectedCounterparty]);
 
-  const filteredData = useMemo(() =>
-    mockCounterparties.filter((item) =>
-      item.name.toLowerCase().includes(searchQuery.toLowerCase())
-    ), [searchQuery]);
+  const handleDownloadReport = useCallback(async () => {
+    if (!conflictCheckResult) {
+      alert('No report data available');
+      return;
+    }
 
-  const totalPages = useMemo(() => Math.ceil(filteredData.length / itemsPerPage), [filteredData.length, itemsPerPage]);
+    try {
+      setIsDownloading(true);
+
+      // Dynamically import jsPDF only (simpler approach without html2canvas)
+      const { jsPDF } = await import('jspdf');
+
+      // Create PDF
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+      });
+
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 20;
+      const contentWidth = pageWidth - (2 * margin);
+      let yPosition = margin;
+
+      // Helper function to add text
+      const addText = (text: string, fontSize: number, isBold: boolean = false, align: 'left' | 'center' = 'left') => {
+        pdf.setFontSize(fontSize);
+        pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
+
+        if (align === 'center') {
+          const textWidth = pdf.getTextWidth(text);
+          const x = (pageWidth - textWidth) / 2;
+          pdf.text(text, x, yPosition);
+        } else {
+          pdf.text(text, margin, yPosition);
+        }
+        yPosition += fontSize / 2 + 3;
+      };
+
+      // Add logo/header
+      pdf.setTextColor(46, 123, 180); // Blue color
+      addText('InfraCredit', 18, true, 'center');
+      yPosition += 5;
+
+      // Add ID
+      pdf.setTextColor(102, 102, 102); // Gray
+      addText(`ID: 1254KD`, 10, false, 'center');
+      yPosition += 10;
+
+      // Add title
+      pdf.setTextColor(44, 62, 80); // Dark gray
+      addText('Conflict of Interest Statement', 16, true, 'center');
+      yPosition += 10;
+
+      // Add counterparty name
+      pdf.setTextColor(46, 123, 180); // Blue
+      addText(conflictCheckResult.counterparty.name, 14, true, 'center');
+      yPosition += 10;
+
+      // Add conflict status box
+      const boxWidth = 120;
+      const boxHeight = 12;
+      const boxX = (pageWidth - boxWidth) / 2;
+
+      if (conflictCheckResult.hasConflict) {
+        pdf.setFillColor(255, 107, 71); // Red/Orange
+        pdf.setTextColor(255, 255, 255); // White text
+      } else {
+        pdf.setFillColor(34, 124, 191); // Blue
+        pdf.setTextColor(255, 255, 255); // White text
+      }
+
+      pdf.roundedRect(boxX, yPosition, boxWidth, boxHeight, 3, 3, 'F');
+
+      const statusText = conflictCheckResult.hasConflict
+        ? 'A Conflict of Interest exists.'
+        : 'No Conflict of Interest exists.';
+
+      pdf.setFontSize(12);
+      pdf.setFont('helvetica', 'bold');
+      const statusTextWidth = pdf.getTextWidth(statusText);
+      pdf.text(statusText, (pageWidth - statusTextWidth) / 2, yPosition + 8);
+
+      yPosition += boxHeight + 15;
+
+      // Add checked by info
+      pdf.setTextColor(102, 102, 102); // Gray
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(11);
+
+      const checkedByText = `Checked by: ${conflictCheckResult.checkedByFullName}`;
+      const checkedByWidth = pdf.getTextWidth(checkedByText);
+      pdf.text(checkedByText, (pageWidth - checkedByWidth) / 2, yPosition);
+      yPosition += 6;
+
+      const dateTimeText = `Date/Time: ${new Date(conflictCheckResult.checkedAt).toLocaleString()}`;
+      const dateTimeWidth = pdf.getTextWidth(dateTimeText);
+      pdf.text(dateTimeText, (pageWidth - dateTimeWidth) / 2, yPosition);
+      yPosition += 15;
+
+      // Add footer
+      pdf.setFontSize(9);
+      pdf.setTextColor(150, 150, 150);
+      const footerText = 'This is an automated report generated by the InfraCredit Conflict Check Portal';
+      const footerWidth = pdf.getTextWidth(footerText);
+      pdf.text(footerText, (pageWidth - footerWidth) / 2, pageHeight - 15);
+
+      // Generate filename
+      const counterpartyName = conflictCheckResult.counterparty.name.replace(/[^a-z0-9]/gi, '_');
+      const date = new Date().toISOString().split('T')[0];
+      const filename = `Conflict_Report_${counterpartyName}_${date}.pdf`;
+
+      // Download PDF
+      pdf.save(filename);
+
+      setIsDownloading(false);
+      console.log('PDF generated successfully');
+    } catch (error) {
+      console.error('Detailed error generating PDF:', error);
+      console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+      console.error('Error message:', error instanceof Error ? error.message : String(error));
+      setIsDownloading(false);
+      alert(`Error generating report: ${error instanceof Error ? error.message : 'Unknown error'}. Check console for details.`);
+    }
+  }, [conflictCheckResult]);
+
+  // Use data from API
+  const counterparties = data?.data || [];
+  const totalRecords = data?.total || 0;
+  const totalPages = Math.ceil(totalRecords / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedData = useMemo(() => filteredData.slice(
-    startIndex,
-    startIndex + itemsPerPage
-  ), [filteredData, startIndex, itemsPerPage]);
 
   const renderPageNumbers = useMemo(() => {
     const pages = [];
@@ -105,9 +241,70 @@ const Dashboard = () => {
     return pages;
   }, [currentPage, totalPages]);
 
+  // Check if user needs to submit declaration
+  const showDeclarationReminder = !bannerDismissed &&
+    declarationStatusData?.data &&
+    !declarationStatusData.data.hasSubmittedThisYear;
+
   return (
     <DashboardLayout>
       <Box p={{ base: 4, md: 5, lg: 6 }} bg="#EDF5FE" minH="100vh">
+        {/* Declaration Reminder Banner */}
+        {showDeclarationReminder && (
+          <Box
+            bg="linear-gradient(135deg, #FFF3E0 0%, #FFE0B2 100%)"
+            borderRadius="12px"
+            p={{ base: 4, md: 5 }}
+            mb={6}
+            border="2px solid #FF9800"
+            position="relative"
+          >
+            <HStack align="flex-start" justify="space-between">
+              <VStack align="stretch" flex="1" gap={3}>
+                <HStack gap={2}>
+                  <Text fontSize={{ base: "20px", md: "24px" }}>⚠️</Text>
+                  <Heading fontSize={{ base: "16px", md: "18px" }} fontWeight="600" color="#E65100">
+                    Declaration Reminder
+                  </Heading>
+                </HStack>
+                <Text fontSize={{ base: "14px", md: "15px" }} color="#333" lineHeight="1.6">
+                  You haven&apos;t submitted your conflict of interest declaration for {new Date().getFullYear()} yet.
+                  Please complete your declaration to ensure compliance.
+                </Text>
+                <HStack gap={3} flexWrap="wrap">
+                  <ChakraButton
+                    bg="#FF9800"
+                    color="white"
+                    fontSize="14px"
+                    fontWeight="500"
+                    px={6}
+                    h="40px"
+                    borderRadius="8px"
+                    _hover={{ bg: '#F57C00' }}
+                    onClick={() => router.push('/declaration')}
+                  >
+                    Submit Declaration Now
+                  </ChakraButton>
+                  <ChakraButton
+                    bg="transparent"
+                    color="#666"
+                    fontSize="14px"
+                    fontWeight="500"
+                    px={4}
+                    h="40px"
+                    borderRadius="8px"
+                    border="1px solid #D0D0D0"
+                    _hover={{ bg: 'rgba(0,0,0,0.05)' }}
+                    onClick={() => setBannerDismissed(true)}
+                  >
+                    Dismiss
+                  </ChakraButton>
+                </HStack>
+              </VStack>
+            </HStack>
+          </Box>
+        )}
+
         {/* Header */}
         <HStack justify="space-between" align="center" mb={6} flexWrap="wrap" gap={4} display={{ base: "none", lg: "flex" }}>
           <Heading fontSize="24px" fontWeight="600" color="#2C3E50">
@@ -292,7 +489,17 @@ const Dashboard = () => {
 
           {/* Table Rows */}
           <VStack gap={2} align="stretch">
-            {paginatedData.map((item, index) => (
+            {isLoading && (
+              <Box textAlign="center" py={8}>
+                <Text color="#666">Loading counterparties...</Text>
+              </Box>
+            )}
+            {error && (
+              <Box textAlign="center" py={8}>
+                <Text color="red.500">Error loading counterparties. Please try again.</Text>
+              </Box>
+            )}
+            {!isLoading && !error && counterparties.map((item, index) => (
               <Box
                 key={item.id}
                 bg="white"
@@ -315,7 +522,7 @@ const Dashboard = () => {
                   </Box>
                   <Box flex="1" pl={56}>
                     <Text fontSize="14px" color="#333">
-                      {item.sector}
+                      {item.sectorName}
                     </Text>
                   </Box>
                   <Box w="200px" textAlign="right">
@@ -330,6 +537,8 @@ const Dashboard = () => {
                       _hover={{ bg: '#1B6AA3' }}
                       onClick={() => {
                         setSelectedCounterparty(item);
+                        setConflictCheckResult(null);
+                        setNotificationSent(false);
                         setIsDisclaimerOpen(true);
                       }}
                     >
@@ -344,7 +553,17 @@ const Dashboard = () => {
 
         {/* Mobile Card View */}
         <VStack gap={{ base: 7, md: 3 }} align="stretch" display={{ base: "flex", lg: "none" }}>
-          {paginatedData.map((item, index) => (
+          {isLoading && (
+            <Box textAlign="center" py={8}>
+              <Text color="#666">Loading counterparties...</Text>
+            </Box>
+          )}
+          {error && (
+            <Box textAlign="center" py={8}>
+              <Text color="red.500">Error loading counterparties. Please try again.</Text>
+            </Box>
+          )}
+          {!isLoading && !error && counterparties.map((item, index) => (
             <Box
               key={item.id}
               bg={{ base: "transparent", md: "white" }}
@@ -358,13 +577,13 @@ const Dashboard = () => {
                 <HStack justify="space-between" pb={4} borderBottom="1px solid #E0E0E0">
                   <Text fontSize={{ base: "15px", md: "11px" }} color="#333" fontWeight="500">#{startIndex + index + 1}</Text>
                   <Box
-                    bg={item.hasConflict ? "#FFF3E0" : "#E8F5E9"}
+                    bg={item.conflictCount > 0 ? "#FFF3E0" : "#E8F5E9"}
                     px={{ base: 3, md: 2 }}
                     py={2}
                     borderRadius="8px"
                   >
-                    <Text fontSize={{ base: "13px", md: "10px" }} color={item.hasConflict ? "#F57C00" : "#2E7D32"} fontWeight="600">
-                      {item.hasConflict ? "HAS CONFLICT" : "NO CONFLICT"}
+                    <Text fontSize={{ base: "13px", md: "10px" }} color={item.conflictCount > 0 ? "#F57C00" : "#2E7D32"} fontWeight="600">
+                      {item.conflictCount > 0 ? "HAS CONFLICT" : "NO CONFLICT"}
                     </Text>
                   </Box>
                 </HStack>
@@ -377,7 +596,7 @@ const Dashboard = () => {
 
                   <Box>
                     <Text fontSize={{ base: "14px", md: "11px" }} color="#333" mb={2}>Sector</Text>
-                    <Text fontSize={{ base: "17px", md: "14px" }} color="#333">{item.sector}</Text>
+                    <Text fontSize={{ base: "17px", md: "14px" }} color="#333">{item.sectorName}</Text>
                   </Box>
                 </VStack>
 
@@ -393,6 +612,8 @@ const Dashboard = () => {
                   _active={{ bg: '#165A8C' }}
                   onClick={() => {
                     setSelectedCounterparty(item);
+                    setConflictCheckResult(null);
+                    setNotificationSent(false);
                     setIsDisclaimerOpen(true);
                   }}
                 >
@@ -429,7 +650,7 @@ const Dashboard = () => {
                 <option value={20}>20</option>
                 <option value={50}>50</option>
               </select>
-              <Text fontWeight="400">of {filteredData.length}</Text>
+              <Text fontWeight="400">of {totalRecords}</Text>
             </HStack>
 
             <HStack gap={2} justify="center">
@@ -540,7 +761,7 @@ const Dashboard = () => {
                 <option value={20}>20</option>
                 <option value={50}>50</option>
               </select>
-              <Text fontWeight="400">out of {filteredData.length}</Text>
+              <Text fontWeight="400">out of {totalRecords}</Text>
             </HStack>
 
             <HStack gap={2}>
@@ -630,7 +851,7 @@ const Dashboard = () => {
                 Disclaimer
               </Heading>
               <Text fontSize="14px" color="#666" textAlign="center" lineHeight="1.6">
-                This activity will be documented as a conflict check conducted on July 7, 2025.
+                This activity will be documented as a conflict check conducted on {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'Africa/Lagos' })}.
               </Text>
               <Button
                 w="100%"
@@ -641,12 +862,10 @@ const Dashboard = () => {
                 h="48px"
                 borderRadius="8px"
                 _hover={{ bg: '#3DA550' }}
-                onClick={() => {
-                  setIsDisclaimerOpen(false);
-                  setShowStatement(true);
-                }}
+                onClick={handleCheckConflict}
+                loading={isCheckingConflict}
               >
-                Proceed
+                {isCheckingConflict ? 'Checking...' : 'Proceed'}
               </Button>
             </VStack>
           </Box>
@@ -654,7 +873,7 @@ const Dashboard = () => {
       )}
 
       {/* Conflict Statement Modal */}
-      {showStatement && selectedCounterparty && (
+      {showStatement && conflictCheckResult && (
         <Box
           position="fixed"
           top="0"
@@ -666,7 +885,11 @@ const Dashboard = () => {
           alignItems="center"
           justifyContent="center"
           zIndex="1000"
-          onClick={() => setShowStatement(false)}
+          onClick={() => {
+            setShowStatement(false);
+            setConflictCheckResult(null);
+            setNotificationSent(false);
+          }}
         >
           <Box
             bg="white"
@@ -696,12 +919,12 @@ const Dashboard = () => {
 
               {/* Counterparty Name */}
               <Heading fontSize="18px" fontWeight="600" color="#2E7BB4" textAlign="center">
-                {selectedCounterparty.name}
+                {conflictCheckResult.counterparty.name}
               </Heading>
 
               {/* Conflict Status */}
               <Box textAlign="center">
-                {selectedCounterparty.hasConflict ? (
+                {conflictCheckResult.hasConflict ? (
                   <Box
                     bg="#FF6B47"
                     color="white"
@@ -733,10 +956,18 @@ const Dashboard = () => {
               {/* Checked By Info */}
               <VStack gap={0.5}>
                 <Text fontSize="13px" color="#666">
-                  Checked by: <Text as="span" color="#333" fontWeight="500">Emmanuel Adeyemo</Text>
+                  Checked by: <Text as="span" color="#333" fontWeight="500">{conflictCheckResult.checkedByFullName}</Text>
                 </Text>
                 <Text fontSize="13px" color="#666">
-                  Date/Time: <Text as="span" color="#333" fontWeight="500">7th July, 2025; 11:25pm</Text>
+                  Date/Time: <Text as="span" color="#333" fontWeight="500">{new Date(conflictCheckResult.checkedAt).toLocaleString('en-US', {
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric',
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    hour12: true,
+                    timeZone: 'Africa/Lagos'
+                  })}</Text>
                 </Text>
               </VStack>
 
@@ -744,35 +975,36 @@ const Dashboard = () => {
               <HStack gap={2} display={{ base: 'flex', md: 'none' }}>
                 <ChakraButton
                   flex="1"
-                  bg={selectedCounterparty.hasConflict && !notificationSent ? "#227CBF" : "#E0E0E0"}
-                  color={selectedCounterparty.hasConflict && !notificationSent ? "white" : "#999"}
+                  bg={conflictCheckResult.hasConflict && !notificationSent ? "#227CBF" : "#E0E0E0"}
+                  color={conflictCheckResult.hasConflict && !notificationSent ? "white" : "#999"}
                   fontSize="11px"
                   fontWeight="500"
                   h="40px"
                   borderRadius="6px"
-                  cursor={selectedCounterparty.hasConflict && !notificationSent ? "pointer" : "not-allowed"}
-                  _hover={selectedCounterparty.hasConflict && !notificationSent ? { bg: '#1B6AA3' } : {}}
-                  _active={selectedCounterparty.hasConflict && !notificationSent ? { bg: '#165A8C' } : {}}
-                  disabled={!selectedCounterparty.hasConflict || notificationSent}
+                  cursor={conflictCheckResult.hasConflict && !notificationSent ? "pointer" : "not-allowed"}
+                  _hover={conflictCheckResult.hasConflict && !notificationSent ? { bg: '#1B6AA3' } : {}}
+                  _active={conflictCheckResult.hasConflict && !notificationSent ? { bg: '#165A8C' } : {}}
+                  disabled={!conflictCheckResult.hasConflict || notificationSent}
                   onClick={handleNotifyCompliance}
                 >
                   Notify Compliance
                 </ChakraButton>
                 <ChakraButton
                   flex="1"
-                  bg={!selectedCounterparty.hasConflict || notificationSent ? "#47B65C" : "#E0E0E0"}
-                  color={!selectedCounterparty.hasConflict || notificationSent ? "white" : "#999"}
+                  bg={!conflictCheckResult.hasConflict || notificationSent ? "#47B65C" : "#E0E0E0"}
+                  color={!conflictCheckResult.hasConflict || notificationSent ? "white" : "#999"}
                   fontSize="11px"
                   fontWeight="500"
                   h="40px"
                   borderRadius="6px"
-                  _hover={!selectedCounterparty.hasConflict || notificationSent ? { bg: '#3DA550' } : {}}
-                  _active={!selectedCounterparty.hasConflict || notificationSent ? { bg: '#2E8B3D' } : {}}
-                  disabled={selectedCounterparty.hasConflict && !notificationSent}
+                  _hover={!conflictCheckResult.hasConflict || notificationSent ? { bg: '#3DA550' } : {}}
+                  _active={!conflictCheckResult.hasConflict || notificationSent ? { bg: '#2E8B3D' } : {}}
+                  disabled={conflictCheckResult.hasConflict && !notificationSent}
+                  onClick={handleDownloadReport}
                 >
                   <HStack gap={1} justify="center">
                     <LuDownload />
-                    <Text>Download</Text>
+                    <Text>{isDownloading ? 'Downloading...' : 'Download'}</Text>
                   </HStack>
                 </ChakraButton>
               </HStack>
@@ -781,47 +1013,48 @@ const Dashboard = () => {
               <HStack gap={3} display={{ base: 'none', md: 'flex' }}>
                 <ChakraButton
                   flex="1"
-                  bg={selectedCounterparty.hasConflict && !notificationSent ? "#227CBF" : "#E0E0E0"}
-                  color={selectedCounterparty.hasConflict && !notificationSent ? "white" : "#999"}
+                  bg={conflictCheckResult.hasConflict && !notificationSent ? "#227CBF" : "#E0E0E0"}
+                  color={conflictCheckResult.hasConflict && !notificationSent ? "white" : "#999"}
                   fontSize="13px"
                   fontWeight="500"
                   h="42px"
                   borderRadius="6px"
-                  cursor={selectedCounterparty.hasConflict && !notificationSent ? "pointer" : "not-allowed"}
-                  _hover={selectedCounterparty.hasConflict && !notificationSent ? { bg: '#1B6AA3' } : {}}
-                  _active={selectedCounterparty.hasConflict && !notificationSent ? { bg: '#165A8C' } : {}}
-                  disabled={!selectedCounterparty.hasConflict || notificationSent}
+                  cursor={conflictCheckResult.hasConflict && !notificationSent ? "pointer" : "not-allowed"}
+                  _hover={conflictCheckResult.hasConflict && !notificationSent ? { bg: '#1B6AA3' } : {}}
+                  _active={conflictCheckResult.hasConflict && !notificationSent ? { bg: '#165A8C' } : {}}
+                  disabled={!conflictCheckResult.hasConflict || notificationSent}
                   onClick={handleNotifyCompliance}
                 >
                   Notify Compliance Department
                 </ChakraButton>
                 <ChakraButton
                   flex="1"
-                  bg={!selectedCounterparty.hasConflict || notificationSent ? "#47B65C" : "#E0E0E0"}
-                  color={!selectedCounterparty.hasConflict || notificationSent ? "white" : "#999"}
+                  bg={!conflictCheckResult.hasConflict || notificationSent ? "#47B65C" : "#E0E0E0"}
+                  color={!conflictCheckResult.hasConflict || notificationSent ? "white" : "#999"}
                   fontSize="13px"
                   fontWeight="500"
                   h="42px"
                   borderRadius="6px"
-                  _hover={!selectedCounterparty.hasConflict || notificationSent ? { bg: '#3DA550' } : {}}
-                  _active={!selectedCounterparty.hasConflict || notificationSent ? { bg: '#2E8B3D' } : {}}
-                  disabled={selectedCounterparty.hasConflict && !notificationSent}
+                  _hover={!conflictCheckResult.hasConflict || notificationSent ? { bg: '#3DA550' } : {}}
+                  _active={!conflictCheckResult.hasConflict || notificationSent ? { bg: '#2E8B3D' } : {}}
+                  disabled={conflictCheckResult.hasConflict && !notificationSent}
+                  onClick={handleDownloadReport}
                 >
                   <HStack gap={2} justify="center">
                     <LuDownload />
-                    <Text>Download Report</Text>
+                    <Text>{isDownloading ? 'Downloading...' : 'Download Report'}</Text>
                   </HStack>
                 </ChakraButton>
               </HStack>
 
               {/* Notification Note */}
-              {selectedCounterparty.hasConflict && !notificationSent && (
+              {conflictCheckResult.hasConflict && !notificationSent && (
                 <Text fontSize="13px" color="#FF6B47" textAlign="center">
                   Note: You must notify the compliance department before downloading the certificate.
                 </Text>
               )}
 
-              {selectedCounterparty.hasConflict && notificationSent && (
+              {conflictCheckResult.hasConflict && notificationSent && (
                 <Text fontSize="13px" color="#47B65C" textAlign="center">
                   Compliance department has been notified. You can now download the report.
                 </Text>

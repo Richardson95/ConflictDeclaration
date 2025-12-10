@@ -29,30 +29,13 @@ import {
   ChartOptions,
 } from 'chart.js';
 import { IEmployee } from '@/lib/interfaces/employee.interfaces';
+import { useNotifyUserMutation, useGetAllUsersDeclarationStatusQuery } from '@/lib/redux/services/dashboard.service';
+import { toaster } from '@/components/ui/toaster';
+import { toPng } from 'html-to-image';
+import jsPDF from 'jspdf';
 
 // Register Chart.js components
 ChartJS.register(ArcElement, Tooltip, Legend);
-
-// Mock data for employees
-const baseEmployees = [
-  { fullName: 'Adebayo Johnson', department: 'Finance', status: 'Completed' as const, completedDate: 'January 30, 2025' },
-  { fullName: 'Funmi Olukar', department: 'Investment', status: 'Pending' as const, completedDate: undefined },
-  { fullName: 'Ibrahim Sulaiman', department: 'Compliance', status: 'Completed' as const, completedDate: 'January 30, 2025' },
-  { fullName: 'Choma Eze', department: 'Finance', status: 'Pending' as const, completedDate: undefined },
-  { fullName: 'Olumide Adeyemi', department: 'Investment', status: 'Completed' as const, completedDate: 'January 30, 2025' },
-  { fullName: 'Adebayo Johnson', department: 'Finance', status: 'Completed' as const, completedDate: 'January 30, 2025' },
-  { fullName: 'Funmi Olukar', department: 'Investment', status: 'Pending' as const, completedDate: undefined },
-  { fullName: 'Ibrahim Sulaiman', department: 'Compliance', status: 'Completed' as const, completedDate: 'January 30, 2025' },
-  { fullName: 'Choma Eze', department: 'Finance', status: 'Pending' as const, completedDate: undefined },
-];
-
-const mockEmployees: IEmployee[] = Array.from({ length: 512 }, (_, i) => ({
-  _id: (i + 1).toString(),
-  fullName: baseEmployees[i % baseEmployees.length].fullName,
-  department: baseEmployees[i % baseEmployees.length].department,
-  status: baseEmployees[i % baseEmployees.length].status,
-  completedDate: baseEmployees[i % baseEmployees.length].completedDate,
-}));
 
 const EmployeesPage = () => {
   const router = useRouter();
@@ -67,6 +50,64 @@ const EmployeesPage = () => {
   const [selectedYear, setSelectedYear] = useState<number>(currentYear);
   const yearOptions = [currentYear - 2, currentYear - 1, currentYear];
 
+  // Notify user mutation
+  const [notifyUser, { isLoading: isNotifying }] = useNotifyUserMutation();
+
+  // Download state
+  const [isDownloading, setIsDownloading] = React.useState(false);
+
+  // Fetch users declaration status from API
+  const { data: usersData, isLoading: isLoadingUsers } = useGetAllUsersDeclarationStatusQuery({
+    page: currentPage,
+    limit: itemsPerPage,
+  });
+
+  const employees = usersData?.data?.result || [];
+  const totalRecords = usersData?.data?.totalRecords || 0;
+  const totalPages = usersData?.data?.totalPages || 1;
+
+  // Format date helper
+  const formatDate = (dateString: string | null | undefined) => {
+    if (!dateString) return '-';
+
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      });
+    } catch (error) {
+      return '-';
+    }
+  };
+
+  // Handle sending notification to user
+  const handleNotifyUser = async (userId: string, fullName: string) => {
+    try {
+      const result = await notifyUser({ userId }).unwrap();
+
+      // Check if the response indicates actual success
+      if (result.success === false || result.message?.includes('error') || result.message?.includes('failed')) {
+        toaster.error({
+          title: 'Message Failed to Send',
+          description: `Unable to send reminder to ${fullName}. Please try again later or contact support.`,
+        });
+        return;
+      }
+
+      toaster.success({
+        title: 'Notification Sent',
+        description: `Reminder sent to ${fullName} successfully.`,
+      });
+    } catch (error: any) {
+      toaster.error({
+        title: 'Message Failed to Send',
+        description: `Unable to send reminder to ${fullName}. Please try again later or contact support.`,
+      });
+    }
+  };
+
   // Filter options
   const statusOptions = [
     { label: 'Completed', value: 'Completed' },
@@ -74,7 +115,7 @@ const EmployeesPage = () => {
   ];
 
   const departmentOptions = [
-    ...Array.from(new Set(mockEmployees.map((item) => item.department))).map(
+    ...Array.from(new Set(employees.map((item: any) => item.department))).map(
       (dept) => ({
         label: dept,
         value: dept,
@@ -105,31 +146,27 @@ const EmployeesPage = () => {
     itemToValue: (item) => item.value,
   });
 
-  // Filter data
+  // Filter data (client-side filtering on current page data)
   const filteredData = useMemo(() => {
-    return mockEmployees.filter((item) => {
+    return employees.filter((item: any) => {
       const matchesSearch = item.fullName.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesStatus = !selectedStatus || item.status === selectedStatus;
+      const matchesStatus = !selectedStatus || item.statusOfDeclarationOfDeclaration === selectedStatus;
       const matchesDepartment = !selectedDepartment || item.department === selectedDepartment;
 
       return matchesSearch && matchesStatus && matchesDepartment;
     });
-  }, [searchQuery, selectedStatus, selectedDepartment]);
+  }, [employees, searchQuery, selectedStatus, selectedDepartment]);
 
   // Calculate statistics for chart
   const statusStats = useMemo(() => {
-    const completed = filteredData.filter((e) => e.status === 'Completed').length;
-    const pending = filteredData.filter((e) => e.status === 'Pending').length;
+    const completed = filteredData.filter((e: any) => e.statusOfDeclaration === 'Completed').length;
+    const pending = filteredData.filter((e: any) => e.statusOfDeclaration === 'Pending').length;
     return { completed, pending };
   }, [filteredData]);
 
-  // Pagination
-  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
+  // Use filtered data for display (already paginated from API)
+  const paginatedData = filteredData;
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedData = filteredData.slice(
-    startIndex,
-    startIndex + itemsPerPage
-  );
 
   // Generate page numbers
   const renderPageNumbers = useMemo(() => {
@@ -188,14 +225,77 @@ const EmployeesPage = () => {
     },
   };
 
-  const handleDownloadReport = () => {
-    console.log('Downloading report for year:', selectedYear);
-    // Implement download logic here
+  const handleDownloadReport = async () => {
+    setIsDownloading(true);
+    try {
+      // Get the main content area (excluding sidebar)
+      const contentElement = document.getElementById('pdf-content');
+
+      if (!contentElement) {
+        throw new Error('Content element not found');
+      }
+
+      // Wait for charts and all content to fully render
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Generate PNG from the content using html-to-image (better CSS support)
+      const dataUrl = await toPng(contentElement, {
+        quality: 1.0,
+        pixelRatio: 2,
+        backgroundColor: '#ffffff',
+      });
+
+      // Create an image to get dimensions
+      const img = new Image();
+      img.src = dataUrl;
+
+      await new Promise((resolve) => {
+        img.onload = resolve;
+      });
+
+      // Calculate PDF dimensions
+      const imgWidth = 210; // A4 width in mm
+      const pageHeight = 297; // A4 height in mm
+      const imgHeight = (img.height * imgWidth) / img.width;
+
+      // Create PDF
+      const pdf = new jsPDF('p', 'mm', 'a4');
+
+      // Add image to PDF (handle multiple pages if content is long)
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      pdf.addImage(dataUrl, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(dataUrl, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
+      // Download the PDF
+      pdf.save(`employee-declaration-status-${selectedYear}.pdf`);
+
+      toaster.success({
+        title: 'Report Downloaded',
+        description: `Employee declaration status report downloaded successfully.`,
+      });
+    } catch (error: any) {
+      console.error('PDF Generation Error:', error);
+      toaster.error({
+        title: 'Download Failed',
+        description: 'Unable to download report. Please try again later.',
+      });
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   return (
     <AdminLayout>
-      <Box px={{ base: 4, md: 6 }} py={6}>
+      <Box id="pdf-content" px={{ base: 4, md: 6 }} py={6}>
         {/* Header */}
         <HStack justify="space-between" mb={6}>
           <Text fontSize="24px" fontWeight="600" color="#2C3E50">
@@ -217,9 +317,10 @@ const EmployeesPage = () => {
               display="flex"
               alignItems="center"
               gap={2}
+              disabled={isDownloading}
             >
               <LuDownload size={16} />
-              Download Report
+              {isDownloading ? 'Generating PDF...' : 'Download Report'}
             </Button>
 
             {/* Year Selector */}
@@ -432,7 +533,7 @@ const EmployeesPage = () => {
             <VStack gap={2} display={{ base: 'none', md: 'flex' }}>
               {paginatedData.map((item, index) => (
                 <Box
-                  key={item._id}
+                  key={item.id}
                   bg={index % 2 === 0 ? 'white' : '#F9FAFB'}
                   borderRadius="8px"
                   px={4}
@@ -440,8 +541,8 @@ const EmployeesPage = () => {
                   w="100%"
                   _hover={{ bg: '#F5F7FA' }}
                   transition="background 0.2s"
-                  cursor={item.status === 'Completed' ? 'pointer' : 'default'}
-                  onClick={item.status === 'Completed' ? () => router.push(`/admin/employees/${item._id}/declarations`) : undefined}
+                  cursor={item.statusOfDeclaration === 'Completed' ? 'pointer' : 'default'}
+                  onClick={item.statusOfDeclaration === 'Completed' ? () => router.push(`/admin/employees/${item.id}/declarations`) : undefined}
                 >
                   <HStack>
                     <Box w="60px">
@@ -462,24 +563,24 @@ const EmployeesPage = () => {
                     <Box w="150px" textAlign="center">
                       <Box
                         display="inline-block"
-                        bg={item.status === 'Completed' ? '#E8F5E9' : '#F5F5F5'}
-                        color={item.status === 'Completed' ? '#47B65C' : '#666'}
+                        bg={item.statusOfDeclaration === 'Completed' ? '#E8F5E9' : '#F5F5F5'}
+                        color={item.statusOfDeclaration === 'Completed' ? '#47B65C' : '#666'}
                         fontSize="12px"
                         fontWeight="500"
                         px={3}
                         py={1}
                         borderRadius="4px"
                       >
-                        {item.status}
+                        {item.statusOfDeclaration}
                       </Box>
                     </Box>
                     <Box w="180px" textAlign="center">
                       <Text fontSize="13px" color="#333">
-                        {item.completedDate || '-'}
+                        {formatDate(item.completedDate)}
                       </Text>
                     </Box>
                     <Box w="100px" display="flex" justifyContent="center">
-                      {item.status === 'Pending' && (
+                      {item.statusOfDeclaration === 'Pending' && (
                         <Box
                           as="button"
                           w="40px"
@@ -490,13 +591,15 @@ const EmployeesPage = () => {
                           bg="white"
                           border="1px solid #E5E7EB"
                           borderRadius="8px"
-                          cursor="pointer"
+                          cursor={isNotifying ? 'not-allowed' : 'pointer'}
+                          opacity={isNotifying ? 0.6 : 1}
                           _hover={{ bg: '#F9FAFB', borderColor: '#47B65C' }}
                           transition="all 0.2s"
                           onClick={(e) => {
                             e.stopPropagation();
-                            // Handle notification
+                            handleNotifyUser(item.id, item.fullName);
                           }}
+                          _disabled={{ opacity: 0.5, cursor: 'not-allowed' }}
                         >
                           <FiBell size={20} color="#47B65C" />
                         </Box>
@@ -511,15 +614,15 @@ const EmployeesPage = () => {
             <VStack gap={3} display={{ base: 'flex', md: 'none' }}>
               {paginatedData.map((item, index) => (
                 <Box
-                  key={item._id}
+                  key={item.id}
                   bg="white"
                   borderRadius="8px"
                   p={4}
                   w="100%"
                   boxShadow="sm"
-                  cursor={item.status === 'Completed' ? 'pointer' : 'default'}
-                  onClick={item.status === 'Completed' ? () => router.push(`/admin/employees/${item._id}/declarations`) : undefined}
-                  _hover={item.status === 'Completed' ? { boxShadow: 'md' } : {}}
+                  cursor={item.statusOfDeclaration === 'Completed' ? 'pointer' : 'default'}
+                  onClick={item.statusOfDeclaration === 'Completed' ? () => router.push(`/admin/employees/${item.id}/declarations`) : undefined}
+                  _hover={item.statusOfDeclaration === 'Completed' ? { boxShadow: 'md' } : {}}
                   transition="box-shadow 0.2s"
                 >
                   <VStack align="stretch" gap={2}>
@@ -553,15 +656,15 @@ const EmployeesPage = () => {
                       </Text>
                       <Box
                         display="inline-block"
-                        bg={item.status === 'Completed' ? '#E8F5E9' : '#F5F5F5'}
-                        color={item.status === 'Completed' ? '#47B65C' : '#666'}
+                        bg={item.statusOfDeclaration === 'Completed' ? '#E8F5E9' : '#F5F5F5'}
+                        color={item.statusOfDeclaration === 'Completed' ? '#47B65C' : '#666'}
                         fontSize="12px"
                         fontWeight="500"
                         px={3}
                         py={1}
                         borderRadius="4px"
                       >
-                        {item.status}
+                        {item.statusOfDeclaration}
                       </Box>
                     </HStack>
                     <HStack justify="space-between">
@@ -569,10 +672,10 @@ const EmployeesPage = () => {
                         Completed Date:
                       </Text>
                       <Text fontSize="13px" color="#333">
-                        {item.completedDate || '-'}
+                        {formatDate(item.completedDate)}
                       </Text>
                     </HStack>
-                    {item.status === 'Pending' && (
+                    {item.statusOfDeclaration === 'Pending' && (
                       <HStack justify="flex-end" mt={2}>
                         <Box
                           as="button"
@@ -584,13 +687,15 @@ const EmployeesPage = () => {
                           bg="white"
                           border="1px solid #E5E7EB"
                           borderRadius="8px"
-                          cursor="pointer"
+                          cursor={isNotifying ? 'not-allowed' : 'pointer'}
+                          opacity={isNotifying ? 0.6 : 1}
                           _hover={{ bg: '#F9FAFB', borderColor: '#47B65C' }}
                           transition="all 0.2s"
                           onClick={(e) => {
                             e.stopPropagation();
-                            // Handle notification
+                            handleNotifyUser(item.id, item.fullName);
                           }}
+                          _disabled={{ opacity: 0.5, cursor: 'not-allowed' }}
                         >
                           <FiBell size={20} color="#47B65C" />
                         </Box>

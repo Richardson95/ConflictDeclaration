@@ -1,7 +1,8 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
+import type { BaseQueryFn, FetchArgs, FetchBaseQueryError } from '@reduxjs/toolkit/query';
 
 import { baseUrl } from '../baseUrl';
-import type { RootState } from '../store';
+import { acquireFreshToken } from '@/lib/utils/msalTokenHelper';
 import type {
   ICounterparty,
   ICounterpartyFilters,
@@ -9,19 +10,35 @@ import type {
   IConflictCheckResponse,
 } from '@/lib/interfaces/counterparty.interfaces';
 
+// Create a custom base query that acquires fresh token before each request
+const baseQuery = fetchBaseQuery({
+  baseUrl: `${baseUrl}`,
+});
+
+const baseQueryWithAuth: BaseQueryFn<
+  string | FetchArgs,
+  unknown,
+  FetchBaseQueryError
+> = async (args, api, extraOptions) => {
+  // Acquire fresh token from MSAL
+  const token = await acquireFreshToken();
+
+  // Modify headers to include the fresh token
+  const argsWithAuth = typeof args === 'string'
+    ? { url: args, headers: {} }
+    : { ...args, headers: args.headers || {} };
+
+  if (token) {
+    (argsWithAuth.headers as Record<string, string>)['authorization'] = `Bearer ${token}`;
+  }
+  (argsWithAuth.headers as Record<string, string>)['Content-Type'] = 'application/json';
+
+  return baseQuery(argsWithAuth, api, extraOptions);
+};
+
 export const counterpartyApi = createApi({
   reducerPath: 'counterpartyApi',
-  baseQuery: fetchBaseQuery({
-    baseUrl: `${baseUrl}`,
-    prepareHeaders: (headers, { getState }) => {
-      const { token } = (getState() as RootState).auth;
-      if (token) {
-        headers.set('authorization', `Bearer ${token}`);
-      }
-      headers.set('Content-Type', 'application/json');
-      return headers;
-    },
-  }),
+  baseQuery: baseQueryWithAuth,
   tagTypes: ['Counterparties', 'ConflictChecks'],
   endpoints: (builder) => ({
     // Get all counterparties with filters
@@ -35,8 +52,8 @@ export const counterpartyApi = createApi({
     >({
       query: ({ filters, page = 1, limit = 10 }) => {
         const params = new URLSearchParams({
-          page: page.toString(),
-          limit: limit.toString(),
+          CurrentPage: page.toString(),
+          PageSize: limit.toString(),
         });
 
         if (filters?.year) params.append('year', filters.year.toString());
@@ -45,24 +62,58 @@ export const counterpartyApi = createApi({
           params.append('hasConflict', filters.hasConflict.toString());
         if (filters?.searchTerm) params.append('search', filters.searchTerm);
 
-        return `counterparties?${params.toString()}`;
+        return `Counterparties?${params.toString()}`;
       },
+      transformResponse: (response: any) => ({
+        data: response.data.result,
+        total: response.data.totalRecords,
+        page: response.data.currentPage,
+        limit: response.data.pageSize,
+      }),
       providesTags: ['Counterparties'],
     }),
 
     // Get single counterparty by ID
-    getCounterpartyById: builder.query<{ data: ICounterparty }, string>({
-      query: (id) => `counterparties/${id}`,
+    getCounterpartyById: builder.query<
+      { data: ICounterparty; message: string; success: boolean },
+      string
+    >({
+      query: (id) => `Counterparties/${id}`,
       providesTags: (_result, _error, id) => [{ type: 'Counterparties', id }],
+    }),
+
+    // Check conflict (general)
+    checkConflictGeneral: builder.mutation<
+      {
+        data: {
+          referenceNumber: string;
+          hasConflict: boolean;
+          message: string;
+          checkedByFullName: string;
+          checkedAt: string;
+          counterparty: { id: string; name: string };
+          user: { id: string; fullName: string; department: string };
+        };
+        message: string;
+        success: boolean;
+      },
+      any
+    >({
+      query: (body) => ({
+        url: 'ConflictChecks/check',
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: ['ConflictChecks', 'Counterparties'],
     }),
 
     // Check conflict for a counterparty
     checkConflict: builder.mutation<
-      { data: IConflictCheckResponse },
+      { data: IConflictCheckResponse; message: string; success: boolean },
       IConflictCheckRequest
     >({
       query: (body) => ({
-        url: 'counterparties/check-conflict',
+        url: 'ConflictChecks/check-counterparty',
         method: 'POST',
         body,
       }),
@@ -71,28 +122,59 @@ export const counterpartyApi = createApi({
 
     // Get conflict check history
     getConflictCheckHistory: builder.query<
-      { data: IConflictCheckResponse[]; total: number },
-      { year?: number; page?: number; limit?: number }
+      { data: any; message: string; success: boolean },
+      { year: number }
     >({
-      query: ({ year, page = 1, limit = 10 }) => {
+      query: ({ year }) => `ConflictChecks/history?year=${year}`,
+      providesTags: ['ConflictChecks'],
+    }),
+
+    // Get detailed conflict check history
+    getConflictCheckHistoryDetail: builder.query<
+      {
+        data: {
+          currentPage: number;
+          pageSize: number;
+          totalRecords: number;
+          totalPages: number;
+          result: Array<{
+            serialNumber: number;
+            counterparty: string;
+            sector: string;
+            date: string;
+            checkDetail: {
+              hasConflict: boolean;
+              message: string;
+              checkedByFullName: string;
+              checkedAt: string;
+              counterparty: { id: string; name: string };
+              user: { id: string; fullName: string; department: string };
+            };
+          }>;
+        };
+        message: string;
+        success: boolean;
+      },
+      { page?: number; limit?: number; year?: number }
+    >({
+      query: ({ page = 1, limit = 10, year }) => {
         const params = new URLSearchParams({
-          page: page.toString(),
-          limit: limit.toString(),
+          CurrentPage: page.toString(),
+          PageSize: limit.toString(),
         });
         if (year) params.append('year', year.toString());
-
-        return `counterparties/conflict-checks?${params.toString()}`;
+        return `ConflictChecks/history-detail?${params.toString()}`;
       },
       providesTags: ['ConflictChecks'],
     }),
 
     // Create a new counterparty (admin)
     createCounterparty: builder.mutation<
-      { data: ICounterparty; message: string },
-      { name: string; sector: string }
+      { data: ICounterparty; message: string; success: boolean },
+      { name: string; sectorId: string }
     >({
       query: (body) => ({
-        url: 'counterparties',
+        url: 'Counterparties',
         method: 'POST',
         body,
       }),
@@ -101,11 +183,11 @@ export const counterpartyApi = createApi({
 
     // Update counterparty
     updateCounterparty: builder.mutation<
-      { data: ICounterparty; message: string },
-      { id: string; data: Partial<{ name: string; sector: string }> }
+      { data: ICounterparty; message: string; success: boolean },
+      { id: string; data: { name?: string; sectorId?: string } }
     >({
       query: ({ id, data }) => ({
-        url: `counterparties/${id}`,
+        url: `Counterparties/${id}`,
         method: 'PUT',
         body: data,
       }),
@@ -116,9 +198,12 @@ export const counterpartyApi = createApi({
     }),
 
     // Delete counterparty
-    deleteCounterparty: builder.mutation<{ message: string }, string>({
+    deleteCounterparty: builder.mutation<
+      { data: boolean; message: string; success: boolean },
+      string
+    >({
       query: (id) => ({
-        url: `counterparties/${id}`,
+        url: `Counterparties/${id}`,
         method: 'DELETE',
       }),
       invalidatesTags: ['Counterparties'],
@@ -148,8 +233,10 @@ export const counterpartyApi = createApi({
 export const {
   useGetCounterpartiesQuery,
   useGetCounterpartyByIdQuery,
+  useCheckConflictGeneralMutation,
   useCheckConflictMutation,
   useGetConflictCheckHistoryQuery,
+  useGetConflictCheckHistoryDetailQuery,
   useCreateCounterpartyMutation,
   useUpdateCounterpartyMutation,
   useDeleteCounterpartyMutation,
