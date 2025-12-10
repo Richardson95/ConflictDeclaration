@@ -1,4 +1,5 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
+import Cookies from 'js-cookie';
 
 import { baseUrl } from '../baseUrl';
 import type { RootState } from '../store';
@@ -50,7 +51,11 @@ export const adminApi = createApi({
   baseQuery: fetchBaseQuery({
     baseUrl: `${baseUrl}`,
     prepareHeaders: (headers, { getState }) => {
-      const { token } = (getState() as RootState).auth;
+      // Try to get token from Redux state first, then from cookies
+      const { token: stateToken } = (getState() as RootState).auth;
+      const cookieToken = Cookies.get('token');
+      const token = stateToken || cookieToken;
+
       if (token) {
         headers.set('authorization', `Bearer ${token}`);
       }
@@ -141,26 +146,35 @@ export const adminApi = createApi({
     // Get audit logs
     getAuditLogs: builder.query<
       {
-        data: Array<{
-          _id: string;
-          action: string;
-          performedBy: string;
-          details: Record<string, any>;
-          timestamp: string;
-        }>;
-        total: number;
+        data: {
+          currentPage: number;
+          pageSize: number;
+          totalRecords: number;
+          totalPages: number;
+          result: Array<{
+            id: string;
+            action: string;
+            resource: string;
+            userId: string;
+            userEmail: string;
+            name: string;
+            ipAddress: string;
+            success: boolean;
+            details: string;
+            createdAt: string;
+          }>;
+        };
+        message: string;
+        success: boolean;
       },
-      { page?: number; limit?: number; startDate?: string; endDate?: string }
+      { page?: number; limit?: number }
     >({
-      query: ({ page = 1, limit = 10, startDate, endDate }) => {
+      query: ({ page = 1, limit = 10 }) => {
         const params = new URLSearchParams({
-          page: page.toString(),
-          limit: limit.toString(),
+          CurrentPage: page.toString(),
+          PageSize: limit.toString(),
         });
-        if (startDate) params.append('startDate', startDate);
-        if (endDate) params.append('endDate', endDate);
-
-        return `admin/audit-logs?${params.toString()}`;
+        return `auditlogs?${params.toString()}`;
       },
     }),
 
@@ -177,6 +191,36 @@ export const adminApi = createApi({
     >({
       query: () => 'admin/system/health',
     }),
+
+    // Get user activities
+    getUserActivities: builder.query<
+      {
+        data: {
+          currentPage: number;
+          pageSize: number;
+          totalRecords: number;
+          totalPages: number;
+          result: Array<{
+            id: string;
+            action: string;
+            details: string;
+            createdAt: string;
+            initiator: string;
+          }>;
+        };
+        message: string;
+        success: boolean;
+      },
+      { page?: number; limit?: number }
+    >({
+      query: ({ page = 1, limit = 10 }) => {
+        const params = new URLSearchParams({
+          CurrentPage: page.toString(),
+          PageSize: limit.toString(),
+        });
+        return `useractivities?${params.toString()}`;
+      },
+    }),
   }),
 });
 
@@ -189,4 +233,5 @@ export const {
   useDownloadComprehensiveReportMutation,
   useGetAuditLogsQuery,
   useGetSystemHealthQuery,
+  useGetUserActivitiesQuery,
 } = adminApi;

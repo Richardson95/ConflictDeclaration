@@ -17,30 +17,10 @@ import {
 } from '@chakra-ui/react';
 import AdminLayout from '@/lib/layout/AdminLayout';
 import { FiChevronLeft, FiChevronRight, FiChevronDown } from 'react-icons/fi';
-
-// Mock data for the table
-const mockCheckHistory = Array.from({ length: 812 }, (_, i) => ({
-  id: i + 1,
-  employee: [
-    'Tari Suoyo',
-    'Eleazor Ibrabox',
-    'Favour Smadox',
-    'Adeoze Nwosu',
-    'Zainab Abubakar',
-    'Oluwafemiola Owibowo',
-    'Simbichukwu Okafur',
-    'Chukwudi Ibe',
-    'Ibrahim Muriala',
-    'Ebisagha Karodo',
-  ][i % 10],
-  department: ['Finance', 'Compliance', 'Investment', 'Finance', 'Compliance'][
-    i % 5
-  ],
-  counterparty: ['Access Bank', 'Deloitte', 'KPMG', 'Access Bank', 'Deloitte'][
-    i % 5
-  ],
-  date: '25 December, 2024',
-}));
+import { useGetConflictMetricsQuery } from '@/lib/redux/services/dashboard.service';
+import { useGetCounterpartiesQuery, useGetConflictCheckHistoryDetailQuery } from '@/lib/redux/services/counterparty.service';
+import { useGetDeclarationsQuery } from '@/lib/redux/services/declaration.service';
+import { useGetUsersQuery } from '@/lib/redux/services/employee.service';
 
 const AdminPanel = () => {
   const [activeTab, setActiveTab] = useState<'check' | 'declaration'>('check');
@@ -52,47 +32,122 @@ const AdminPanel = () => {
   const [selectedDepartment, setSelectedDepartment] = useState('');
 
   // Year selector
-  const currentYear = 2025; // Current year
+  const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState<number>(currentYear);
 
   const yearOptions = [currentYear - 2, currentYear - 1, currentYear];
 
-  // Create collections for filters
-  const employeeOptions = [
-    ...Array.from(new Set(mockCheckHistory.map((item) => item.employee))).map(
-      (employee) => ({
-        label: employee,
-        value: employee,
-      })
-    ),
-  ];
-
-  const counterpartyOptions = [
-    ...Array.from(
-      new Set(mockCheckHistory.map((item) => item.counterparty))
-    ).map((counterparty) => ({
-      label: counterparty,
-      value: counterparty,
-    })),
-  ];
-
-  const departmentOptions = [
-    ...Array.from(new Set(mockCheckHistory.map((item) => item.department))).map(
-      (department) => ({
-        label: department,
-        value: department,
-      })
-    ),
-  ];
-
-  const employeeCollection = createListCollection({
-    items: employeeOptions,
-    itemToString: (item) => item.label,
-    itemToValue: (item) => item.value,
+  // Fetch ALL conflict check history from API (fetch large dataset for client-side filtering)
+  const { data: checkHistoryData, isLoading: isLoadingCheckHistory } = useGetConflictCheckHistoryDetailQuery({
+    page: 1,
+    limit: 10000, // Fetch all records
+    year: selectedYear,
   });
 
-  const counterpartyCollection = createListCollection({
-    items: counterpartyOptions,
+  // Fetch ALL declaration history from API (fetch large dataset for client-side filtering)
+  const { data: declarationHistoryData, isLoading: isLoadingDeclarationHistory } = useGetDeclarationsQuery({
+    page: 1,
+    limit: 10000, // Fetch all records
+    year: selectedYear,
+  });
+
+  // Fetch dropdown filter options from existing endpoints
+  const { data: usersData } = useGetUsersQuery({ page: 1, limit: 1000 });
+  const { data: counterpartiesDataForFilter } = useGetCounterpartiesQuery({ page: 1, limit: 1000 });
+
+  // Process ALL data from API
+  const allCheckHistory = checkHistoryData?.data?.result || [];
+  const allDeclarationHistory = declarationHistoryData?.data?.result || [];
+
+  // Apply client-side filtering
+  const filteredCheckHistory = useMemo(() => {
+    return allCheckHistory.filter((item: any) => {
+      const employee = item.checkDetail?.user?.fullName || item.checkDetail?.checkedByFullName || item.userFullName || item.checkedByFullName || '';
+      const counterparty = item.checkDetail?.counterparty?.name || item.counterpartyName || item.counterparty || '';
+      const department = item.checkDetail?.user?.department || item.department || item.departmentName || '';
+
+      const matchesEmployee = !selectedEmployee || employee.toLowerCase().includes(selectedEmployee.toLowerCase());
+      const matchesCounterparty = !selectedCounterparty || counterparty.toLowerCase().includes(selectedCounterparty.toLowerCase());
+      const matchesDepartment = !selectedDepartment || department.toLowerCase().includes(selectedDepartment.toLowerCase());
+      const matchesSearch = !searchQuery ||
+        employee.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        counterparty.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        department.toLowerCase().includes(searchQuery.toLowerCase());
+
+      return matchesEmployee && matchesCounterparty && matchesDepartment && matchesSearch;
+    });
+  }, [allCheckHistory, selectedEmployee, selectedCounterparty, selectedDepartment, searchQuery]);
+
+  const filteredDeclarationHistory = useMemo(() => {
+    return allDeclarationHistory.filter((item: any) => {
+      const employee = item.userName || '';
+      const department = item.department || item.departmentName || '';
+
+      const matchesEmployee = !selectedEmployee || employee.toLowerCase().includes(selectedEmployee.toLowerCase());
+      const matchesDepartment = !selectedDepartment || department.toLowerCase().includes(selectedDepartment.toLowerCase());
+      const matchesSearch = !searchQuery ||
+        employee.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        department.toLowerCase().includes(searchQuery.toLowerCase());
+
+      return matchesEmployee && matchesDepartment && matchesSearch;
+    });
+  }, [allDeclarationHistory, selectedEmployee, selectedDepartment, searchQuery]);
+
+  // Get filtered data based on active tab
+  const filteredData = activeTab === 'check' ? filteredCheckHistory : filteredDeclarationHistory;
+
+  // Client-side pagination
+  const totalRecords = filteredData.length;
+  const totalPages = Math.ceil(totalRecords / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedData = filteredData.slice(startIndex, endIndex);
+
+  // Create filter options from real endpoints
+  const employeeOptions = useMemo(() => {
+    const users = usersData?.data?.result || [];
+    const uniqueEmployees = Array.from(
+      new Set(users.map(u => `${u.firstName} ${u.lastName}`))
+    );
+    return [
+      { label: 'All Employees', value: '' },
+      ...uniqueEmployees.map(emp => ({ label: emp, value: emp }))
+    ];
+  }, [usersData]);
+
+  const departmentOptions = useMemo(() => {
+    // Extract unique departments from actual data since Departments table is empty
+    const departments = new Set<string>();
+
+    // Get departments from check history
+    allCheckHistory.forEach((item: any) => {
+      const dept = item.checkDetail?.user?.department || item.department || item.departmentName;
+      if (dept) departments.add(dept);
+    });
+
+    // Get departments from declaration history
+    allDeclarationHistory.forEach((item: any) => {
+      const dept = item.department || item.departmentName;
+      if (dept) departments.add(dept);
+    });
+
+    return [
+      { label: 'All Departments', value: '' },
+      ...Array.from(departments).sort().map(dept => ({ label: dept, value: dept }))
+    ];
+  }, [allCheckHistory, allDeclarationHistory]);
+
+  const counterpartyOptions = useMemo(() => {
+    const counterparties = counterpartiesDataForFilter?.data || [];
+    return [
+      { label: 'All Counterparties', value: '' },
+      ...counterparties.map(cp => ({ label: cp.name, value: cp.name }))
+    ];
+  }, [counterpartiesDataForFilter]);
+
+  // Create collections for filters
+  const employeeCollection = createListCollection({
+    items: employeeOptions,
     itemToString: (item) => item.label,
     itemToValue: (item) => item.value,
   });
@@ -103,6 +158,13 @@ const AdminPanel = () => {
     itemToValue: (item) => item.value,
   });
 
+  const counterpartyCollection = createListCollection({
+    items: counterpartyOptions,
+    itemToString: (item) => item.label,
+    itemToValue: (item) => item.value,
+  });
+
+  // Create collections for items per page select
   const itemsPerPageOptions = [10, 20, 50, 100].map((num) => ({
     label: num.toString(),
     value: num.toString(),
@@ -114,55 +176,43 @@ const AdminPanel = () => {
     itemToValue: (item) => item.value,
   });
 
-  // Statistics
-  const stats = {
-    totalEmployees: 24,
-    completedDeclarations: 14,
-    pendingDeclarations: 10,
-    totalCounterparties: 30,
-    totalConflicts: 200,
-    conflictedCounterparties: 5,
-  };
+  // Fetch conflict metrics from API
+  const { data: conflictMetricsData, isLoading: isLoadingMetrics } = useGetConflictMetricsQuery({
+    year: selectedYear,
+  });
 
-  // Reset pagination when tab changes
+  // Fetch counterparties to get total count
+  const { data: counterpartiesData } = useGetCounterpartiesQuery({
+    page: 1,
+    limit: 1, // Just need the total count
+  });
+
+  // Statistics - Using real API data
+  const stats = useMemo(() => {
+    const metrics = conflictMetricsData?.data;
+    return {
+      totalEmployees: metrics?.totalEmployeeCount || 0,
+      completedDeclarations: metrics?.totalUsersThatHaveCompletedConflictDeclaration || 0,
+      pendingDeclarations: metrics?.totalUsersThatHaveNotCompletedConflictDeclaration || 0,
+      totalCounterparties: metrics?.totalNumberOfCounterParties || 0,
+      totalConflicts: metrics?.totalNumberOfConflicts || 0,
+      conflictedCounterparties: metrics?.totalNumberOfConflictedCounterParties || 0,
+    };
+  }, [conflictMetricsData]);
+
+  // Reset pagination and filters when tab changes
   useEffect(() => {
     setCurrentPage(1);
+    setSearchQuery('');
+    setSelectedEmployee('');
+    setSelectedCounterparty('');
+    setSelectedDepartment('');
   }, [activeTab]);
 
-  // Filter data
-  const filteredData = useMemo(() => {
-    return mockCheckHistory.filter((item) => {
-      const matchesSearch =
-        item.employee.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.counterparty.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesEmployee =
-        !selectedEmployee || item.employee === selectedEmployee;
-      const matchesCounterparty =
-        !selectedCounterparty || item.counterparty === selectedCounterparty;
-      const matchesDepartment =
-        !selectedDepartment || item.department === selectedDepartment;
-
-      return (
-        matchesSearch &&
-        matchesEmployee &&
-        matchesCounterparty &&
-        matchesDepartment
-      );
-    });
-  }, [
-    searchQuery,
-    selectedEmployee,
-    selectedCounterparty,
-    selectedDepartment,
-  ]);
-
-  // Pagination
-  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedData = filteredData.slice(
-    startIndex,
-    startIndex + itemsPerPage
-  );
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedEmployee, selectedCounterparty, selectedDepartment, selectedYear, itemsPerPage]);
 
   // Generate page numbers
   const renderPageNumbers = useMemo(() => {
@@ -425,8 +475,8 @@ const AdminPanel = () => {
                 <ChakraSelect.Root
                   collection={employeeCollection}
                   size="sm"
-                  value={[selectedEmployee]}
-                  onValueChange={(e) => setSelectedEmployee(e.value[0])}
+                  value={selectedEmployee ? [selectedEmployee] : []}
+                  onValueChange={(e) => setSelectedEmployee(e.value[0] || '')}
                 >
                   <ChakraSelect.Trigger
                     bg="white"
@@ -445,8 +495,8 @@ const AdminPanel = () => {
                     zIndex={1500}
                     position="absolute"
                   >
-                    {employeeOptions.map((option) => (
-                      <ChakraSelect.Item key={option.value} item={option}>
+                    {employeeOptions.map((option, idx) => (
+                      <ChakraSelect.Item key={`emp-${idx}`} item={option}>
                         {option.label}
                       </ChakraSelect.Item>
                     ))}
@@ -460,8 +510,8 @@ const AdminPanel = () => {
                   <ChakraSelect.Root
                     collection={counterpartyCollection}
                     size="sm"
-                    value={[selectedCounterparty]}
-                    onValueChange={(e) => setSelectedCounterparty(e.value[0])}
+                    value={selectedCounterparty ? [selectedCounterparty] : []}
+                    onValueChange={(e) => setSelectedCounterparty(e.value[0] || '')}
                   >
                     <ChakraSelect.Trigger
                       bg="white"
@@ -480,8 +530,8 @@ const AdminPanel = () => {
                       zIndex={1500}
                       position="absolute"
                     >
-                      {counterpartyOptions.map((option) => (
-                        <ChakraSelect.Item key={option.value} item={option}>
+                      {counterpartyOptions.map((option, idx) => (
+                        <ChakraSelect.Item key={`cp-${idx}`} item={option}>
                           {option.label}
                         </ChakraSelect.Item>
                       ))}
@@ -495,8 +545,8 @@ const AdminPanel = () => {
                 <ChakraSelect.Root
                   collection={departmentCollection}
                   size="sm"
-                  value={[selectedDepartment]}
-                  onValueChange={(e) => setSelectedDepartment(e.value[0])}
+                  value={selectedDepartment ? [selectedDepartment] : []}
+                  onValueChange={(e) => setSelectedDepartment(e.value[0] || '')}
                 >
                   <ChakraSelect.Trigger
                     bg="white"
@@ -515,8 +565,8 @@ const AdminPanel = () => {
                     zIndex={1500}
                     position="absolute"
                   >
-                    {departmentOptions.map((option) => (
-                      <ChakraSelect.Item key={option.value} item={option}>
+                    {departmentOptions.map((option, idx) => (
+                      <ChakraSelect.Item key={`dept-${idx}`} item={option}>
                         {option.label}
                       </ChakraSelect.Item>
                     ))}
@@ -539,6 +589,32 @@ const AdminPanel = () => {
                   height="40px"
                 />
               </Box>
+
+              {/* Clear Filters Button */}
+              {(searchQuery || selectedEmployee || selectedDepartment || selectedCounterparty) && (
+                <Box
+                  as="button"
+                  px={4}
+                  py={2}
+                  bg="#F3F4F6"
+                  color="#374151"
+                  fontSize="13px"
+                  fontWeight="500"
+                  borderRadius="6px"
+                  height="40px"
+                  cursor="pointer"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setSelectedEmployee('');
+                    setSelectedDepartment('');
+                    setSelectedCounterparty('');
+                  }}
+                  _hover={{ bg: '#E5E7EB' }}
+                  transition="background 0.2s"
+                >
+                  Clear Filters
+                </Box>
+              )}
             </HStack>
 
           {/* Table */}
@@ -585,107 +661,173 @@ const AdminPanel = () => {
 
             {/* Table Body - Desktop */}
             <VStack gap={2} display={{ base: 'none', md: 'flex' }}>
-              {paginatedData.map((item, index) => (
-                <Box
-                  key={item.id}
-                  bg={index % 2 === 0 ? 'white' : '#F9FAFB'}
-                  borderRadius="8px"
-                  px={4}
-                  py={3}
-                  w="100%"
-                  _hover={{ bg: '#F5F7FA' }}
-                  transition="background 0.2s"
-                >
-                  <HStack>
-                    <Box w="60px">
-                      <Text fontSize="13px" color="#333">
-                        {activeTab === 'check' ? startIndex + index + 1 : 1}
-                      </Text>
-                    </Box>
-                    <Box flex="1">
-                      <Text fontSize="13px" color="#333">
-                        {item.employee}
-                      </Text>
-                    </Box>
-                    <Box flex="1">
-                      <Text fontSize="13px" color="#333">
-                        {item.department}
-                      </Text>
-                    </Box>
-                    {activeTab === 'check' && (
-                      <Box flex="1">
-                        <Text fontSize="13px" color="#333">
-                          {item.counterparty}
-                        </Text>
-                      </Box>
-                    )}
-                    <Box flex="1">
-                      <Text fontSize="13px" color="#333">
-                        {item.date}
-                      </Text>
-                    </Box>
-                  </HStack>
+              {isLoadingCheckHistory || isLoadingDeclarationHistory ? (
+                <Box textAlign="center" py={8}>
+                  <Text color="#666">Loading...</Text>
                 </Box>
-              ))}
+              ) : paginatedData.length === 0 ? (
+                <Box textAlign="center" py={8}>
+                  <Text color="#666">No records found for {selectedYear}</Text>
+                </Box>
+              ) : (
+                paginatedData.map((item: any, index) => {
+                  const employee = activeTab === 'check'
+                    ? (item.checkDetail?.user?.fullName || item.checkDetail?.checkedByFullName || item.userFullName || item.checkedByFullName || 'Unknown')
+                    : (item.userName || 'Unknown');
+                  const department = activeTab === 'check'
+                    ? (item.checkDetail?.user?.department || item.department || item.departmentName || 'N/A')
+                    : (item.department || item.departmentName || 'N/A');
+                  const counterparty = activeTab === 'check'
+                    ? (item.checkDetail?.counterparty?.name || item.counterpartyName || item.counterparty || 'Unknown')
+                    : '';
+                  const date = activeTab === 'check'
+                    ? new Date(item.checkDetail?.checkedAt || item.date || item.checkedAt).toLocaleDateString('en-US', {
+                        day: 'numeric',
+                        month: 'long',
+                        year: 'numeric',
+                      })
+                    : new Date(item.submittedAt).toLocaleDateString('en-US', {
+                        day: 'numeric',
+                        month: 'long',
+                        year: 'numeric',
+                      });
+
+                  return (
+                    <Box
+                      key={item.id || item.checkId || index}
+                      bg={index % 2 === 0 ? 'white' : '#F9FAFB'}
+                      borderRadius="8px"
+                      px={4}
+                      py={3}
+                      w="100%"
+                      _hover={{ bg: '#F5F7FA' }}
+                      transition="background 0.2s"
+                    >
+                      <HStack>
+                        <Box w="60px">
+                          <Text fontSize="13px" color="#333">
+                            {startIndex + index + 1}
+                          </Text>
+                        </Box>
+                        <Box flex="1">
+                          <Text fontSize="13px" color="#333">
+                            {employee}
+                          </Text>
+                        </Box>
+                        <Box flex="1">
+                          <Text fontSize="13px" color="#333">
+                            {department}
+                          </Text>
+                        </Box>
+                        {activeTab === 'check' && (
+                          <Box flex="1">
+                            <Text fontSize="13px" color="#333">
+                              {counterparty}
+                            </Text>
+                          </Box>
+                        )}
+                        <Box flex="1">
+                          <Text fontSize="13px" color="#333">
+                            {date}
+                          </Text>
+                        </Box>
+                      </HStack>
+                    </Box>
+                  );
+                })
+              )}
             </VStack>
 
             {/* Table Body - Mobile Cards */}
             <VStack gap={3} display={{ base: 'flex', md: 'none' }}>
-              {paginatedData.map((item, index) => (
-                <Box
-                  key={item.id}
-                  bg="white"
-                  borderRadius="8px"
-                  p={4}
-                  w="100%"
-                  boxShadow="sm"
-                >
-                  <VStack align="stretch" gap={2}>
-                    <HStack justify="space-between">
-                      <Text fontSize="12px" fontWeight="600" color="#666">
-                        S/N:
-                      </Text>
-                      <Text fontSize="13px" color="#333">
-                        {activeTab === 'check' ? startIndex + index + 1 : 1}
-                      </Text>
-                    </HStack>
-                    <HStack justify="space-between">
-                      <Text fontSize="12px" fontWeight="600" color="#666">
-                        Employee:
-                      </Text>
-                      <Text fontSize="13px" color="#333">
-                        {item.employee}
-                      </Text>
-                    </HStack>
-                    <HStack justify="space-between">
-                      <Text fontSize="12px" fontWeight="600" color="#666">
-                        Department:
-                      </Text>
-                      <Text fontSize="13px" color="#333">
-                        {item.department}
-                      </Text>
-                    </HStack>
-                    {activeTab === 'check' && (
-                      <HStack justify="space-between">
-                        <Text fontSize="12px" fontWeight="600" color="#666">
-                          Counterparty:
-                        </Text>
-                        <Text fontSize="13px" color="#333">
-                          {item.counterparty}
-                        </Text>
-                      </HStack>
-                    )}
-                    <HStack justify="space-between">
-                      <Text fontSize="12px" fontWeight="600" color="#666">
-                        Date:
-                      </Text>
-                      <Text fontSize="13px" color="#333">
-                        {item.date}
-                      </Text>
-                    </HStack>
-                  </VStack>
+              {isLoadingCheckHistory || isLoadingDeclarationHistory ? (
+                <Box textAlign="center" py={8}>
+                  <Text color="#666">Loading...</Text>
                 </Box>
-              ))}
+              ) : paginatedData.length === 0 ? (
+                <Box textAlign="center" py={8}>
+                  <Text color="#666">No records found for {selectedYear}</Text>
+                </Box>
+              ) : (
+                paginatedData.map((item: any, index) => {
+                  const employee = activeTab === 'check'
+                    ? (item.checkDetail?.user?.fullName || item.checkDetail?.checkedByFullName || item.userFullName || item.checkedByFullName || 'Unknown')
+                    : (item.userName || 'Unknown');
+                  const department = activeTab === 'check'
+                    ? (item.checkDetail?.user?.department || item.department || item.departmentName || 'N/A')
+                    : (item.department || item.departmentName || 'N/A');
+                  const counterparty = activeTab === 'check'
+                    ? (item.checkDetail?.counterparty?.name || item.counterpartyName || item.counterparty || 'Unknown')
+                    : '';
+                  const date = activeTab === 'check'
+                    ? new Date(item.checkDetail?.checkedAt || item.date || item.checkedAt).toLocaleDateString('en-US', {
+                        day: 'numeric',
+                        month: 'long',
+                        year: 'numeric',
+                      })
+                    : new Date(item.submittedAt).toLocaleDateString('en-US', {
+                        day: 'numeric',
+                        month: 'long',
+                        year: 'numeric',
+                      });
+
+                  return (
+                    <Box
+                      key={item.id || item.checkId || index}
+                      bg="white"
+                      borderRadius="8px"
+                      p={4}
+                      w="100%"
+                      boxShadow="sm"
+                    >
+                      <VStack align="stretch" gap={2}>
+                        <HStack justify="space-between">
+                          <Text fontSize="12px" fontWeight="600" color="#666">
+                            S/N:
+                          </Text>
+                          <Text fontSize="13px" color="#333">
+                            {startIndex + index + 1}
+                          </Text>
+                        </HStack>
+                        <HStack justify="space-between">
+                          <Text fontSize="12px" fontWeight="600" color="#666">
+                            Employee:
+                          </Text>
+                          <Text fontSize="13px" color="#333">
+                            {employee}
+                          </Text>
+                        </HStack>
+                        <HStack justify="space-between">
+                          <Text fontSize="12px" fontWeight="600" color="#666">
+                            Department:
+                          </Text>
+                          <Text fontSize="13px" color="#333">
+                            {department}
+                          </Text>
+                        </HStack>
+                        {activeTab === 'check' && (
+                          <HStack justify="space-between">
+                            <Text fontSize="12px" fontWeight="600" color="#666">
+                              Counterparty:
+                            </Text>
+                            <Text fontSize="13px" color="#333">
+                              {counterparty}
+                            </Text>
+                          </HStack>
+                        )}
+                        <HStack justify="space-between">
+                          <Text fontSize="12px" fontWeight="600" color="#666">
+                            Date:
+                          </Text>
+                          <Text fontSize="13px" color="#333">
+                            {date}
+                          </Text>
+                        </HStack>
+                      </VStack>
+                    </Box>
+                  );
+                })
+              )}
             </VStack>
           </Box>
 
@@ -722,7 +864,7 @@ const AdminPanel = () => {
                 </ChakraSelect.Content>
               </ChakraSelect.Root>
               <Text fontSize="13px" color="#666">
-                out of {filteredData.length}
+                out of {totalRecords}
               </Text>
             </HStack>
 

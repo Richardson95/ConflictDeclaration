@@ -9,8 +9,8 @@ export const msalConfig = {
     // redirectUri: 'https://ta-eta-wine.vercel.app',
   },
   cache: {
-    cacheLocation: 'sessionStorage',
-    storeAuthStateInCookie: false,
+    cacheLocation: 'localStorage', // Changed from sessionStorage to persist across sessions
+    storeAuthStateInCookie: true, // Store state in cookie for better persistence
   },
   system: {
     loggerOptions: {
@@ -40,7 +40,7 @@ export const msalConfig = {
 };
 
 export const loginRequest = {
-  scopes: ['api://aba68f74-198c-4271-bbb1-8331688b4a09/Grant.API.Access'],
+  scopes: ['api://aba68f74-198c-4271-bbb1-8331688b4a09/Grant.API.Access', 'offline_access'],
 };
 
 export const graphConfig = {

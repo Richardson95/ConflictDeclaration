@@ -22,11 +22,18 @@ const Login = () => {
     instance
       .loginPopup(loginRequest)
       .then((res) => {
-        const { accessToken } = res;
-        const email = res.account?.username;
+        const { accessToken, account } = res;
+        const email = account?.username;
         const data = { email };
         const payload = { data, token: accessToken };
-        Cookies.set('token', accessToken, { expires: 1 });
+
+        // Store token with longer expiration (7 days)
+        // MSAL will automatically refresh it before expiration
+        Cookies.set('token', accessToken, { expires: 7 });
+
+        // Set the active account for MSAL to use for silent token acquisition
+        instance.setActiveAccount(account);
+
         dispatch(setCredentials(payload));
         toaster.success({
           title: 'Login successful',

@@ -1,12 +1,11 @@
 export interface ICounterparty {
-  _id: string;
+  id: string;
   name: string;
-  sector: string;
-  conflicts: number;
-  hasConflict: boolean;
-  employees: string[];
+  sectorId: string;
+  sectorName: string;
+  conflictCount: number;
+  isActive: boolean;
   createdAt: string;
-  updatedAt: string;
 }
 
 export interface ICounterpartyFilters {
@@ -18,20 +17,15 @@ export interface ICounterpartyFilters {
 
 export interface IConflictCheckRequest {
   counterpartyId: string;
-  year: number;
 }
 
 export interface IConflictCheckResponse {
-  checkId: string;
-  counterpartyName: string;
   hasConflict: boolean;
-  conflictedEmployees: IConflictedEmployee[];
-  checkedBy: string;
+  message: string;
+  checkedByFullName: string;
   checkedAt: string;
-}
-
-export interface IConflictedEmployee {
-  _id: string;
-  fullName: string;
-  department: string;
+  counterparty: {
+    id: string;
+    name: string;
+  };
 }

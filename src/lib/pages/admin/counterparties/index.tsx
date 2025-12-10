@@ -21,28 +21,10 @@ import { Button } from '@/components/ui';
 import AdminLayout from '@/lib/layout/AdminLayout';
 import { FiChevronDown } from 'react-icons/fi';
 import { LuDownload } from 'react-icons/lu';
-
-// Mock data for counterparties
-const baseCounterparties = [
-  { name: 'Access Bank', sector: 'Banking', conflicts: 0, hasConflict: false, employees: [] },
-  { name: 'Agusto', sector: 'Credit Rating', conflicts: 4, hasConflict: true, employees: ['Seiyefa Oyintare', 'Uzoma Okechukwu', 'Simisola Olowookere', 'Fiyebo Diongoli', 'Kolawole Oyelowo'] },
-  { name: 'Auro', sector: 'Technology', conflicts: 4, hasConflict: true, employees: ['John Doe', 'Jane Smith', 'Michael Brown', 'Sarah Wilson'] },
-  { name: 'Deloitte', sector: 'Professional Services', conflicts: 4, hasConflict: true, employees: ['David Lee', 'Emily Chen', 'Robert Taylor', 'Lisa Anderson'] },
-  { name: 'KPMG', sector: 'Professional Services', conflicts: 4, hasConflict: true, employees: ['James Martin', 'Patricia Garcia', 'Christopher White', 'Jennifer Moore'] },
-  { name: 'Access Bank', sector: 'Banking', conflicts: 4, hasConflict: true, employees: ['Daniel Jackson', 'Michelle Thompson', 'Kevin Martinez', 'Amanda Robinson'] },
-  { name: 'Agusto', sector: 'Credit Rating', conflicts: 4, hasConflict: true, employees: ['Seiyefa Oyintare', 'Uzoma Okechukwu', 'Simisola Olowookere', 'Fiyebo Diongoli', 'Kolawole Oyelowo'] },
-  { name: 'Auro', sector: 'Technology', conflicts: 4, hasConflict: true, employees: ['John Doe', 'Jane Smith', 'Michael Brown', 'Sarah Wilson'] },
-  { name: 'Deloitte', sector: 'Professional Services', conflicts: 4, hasConflict: true, employees: ['David Lee', 'Emily Chen', 'Robert Taylor', 'Lisa Anderson'] },
-];
-
-const mockCounterparties = Array.from({ length: 512 }, (_, i) => ({
-  id: i + 1,
-  name: baseCounterparties[i % baseCounterparties.length].name,
-  sector: baseCounterparties[i % baseCounterparties.length].sector,
-  conflicts: baseCounterparties[i % baseCounterparties.length].conflicts,
-  hasConflict: baseCounterparties[i % baseCounterparties.length].hasConflict,
-  employees: baseCounterparties[i % baseCounterparties.length].employees,
-}));
+import { useGetCounterpartiesQuery } from '@/lib/redux/services/counterparty.service';
+import { useGetCounterpartyConflictSummaryQuery, useDownloadCounterpartyConflictSummaryMutation } from '@/lib/redux/services/dashboard.service';
+import { useGetActiveSectorsQuery } from '@/lib/redux/services/sector.service';
+import { useGetDeclarationsQuery } from '@/lib/redux/services/declaration.service';
 
 const CounterpartiesPage = () => {
   const [currentPage, setCurrentPage] = useState(1);
@@ -51,31 +33,70 @@ const CounterpartiesPage = () => {
   const [selectedSector, setSelectedSector] = useState('');
   const [selectedConflict, setSelectedConflict] = useState('');
   const [isDisclaimerOpen, setIsDisclaimerOpen] = useState(false);
-  const [selectedCounterparty, setSelectedCounterparty] = useState<typeof mockCounterparties[0] | null>(null);
+  const [selectedCounterparty, setSelectedCounterparty] = useState<any>(null);
   const [showStatement, setShowStatement] = useState(false);
   const [notificationSent, setNotificationSent] = useState(false);
 
   // Year selector
-  const currentYear = 2025;
+  const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState<number>(currentYear);
   const yearOptions = [currentYear - 2, currentYear - 1, currentYear];
 
+  // Mutations
+  const [downloadReport] = useDownloadCounterpartyConflictSummaryMutation();
+
+  const handleViewDetails = (counterparty: any) => {
+    setSelectedCounterparty(counterparty);
+    setShowStatement(true);
+  };
+
   const handleNotifyCompliance = useCallback(() => {
     if (selectedCounterparty) {
-      console.log('Notifying compliance for:', selectedCounterparty.name);
+      console.log('Notifying compliance for:', selectedCounterparty.counterparty || selectedCounterparty.name);
       setNotificationSent(true);
     }
   }, [selectedCounterparty]);
 
+  const handleDownloadReport = async (format: 'csv' | 'excel') => {
+    try {
+      const blob = await downloadReport({ format }).unwrap();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `counterparty-conflict-summary-${selectedYear}.${format === 'excel' ? 'xlsx' : 'csv'}`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error('Error downloading report:', error);
+    }
+  };
+
+  // Fetch counterparty conflict summary from API
+  const { data: counterpartiesData, isLoading: isLoadingCounterparties } = useGetCounterpartyConflictSummaryQuery({
+    page: currentPage,
+    limit: itemsPerPage,
+  });
+
+  // Fetch sectors for filter
+  const { data: sectorsData } = useGetActiveSectorsQuery({
+    page: 1,
+    limit: 100,
+  });
+
+  const counterparties = counterpartiesData?.data?.result || [];
+  const totalRecords = counterpartiesData?.data?.totalRecords || 0;
+  const totalPages = counterpartiesData?.data?.totalPages || 1;
+
   // Filter options
-  const sectorOptions = [
-    ...Array.from(new Set(mockCounterparties.map((item) => item.sector))).map(
-      (sector) => ({
-        label: sector,
-        value: sector,
-      })
-    ),
-  ];
+  const sectorOptions = useMemo(() => {
+    if (!sectorsData?.data?.result) return [];
+    return sectorsData.data.result.map((sector: any) => ({
+      label: sector.name,
+      value: sector.name,
+    }));
+  }, [sectorsData]);
 
   const conflictOptions = [
     { label: 'Has Conflict', value: 'has' },
@@ -105,27 +126,27 @@ const CounterpartiesPage = () => {
     itemToValue: (item) => item.value,
   });
 
-  // Filter data
+  // Filter data (client-side filtering for current page)
   const filteredData = useMemo(() => {
-    return mockCounterparties.filter((item) => {
-      const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesSector = !selectedSector || item.sector === selectedSector;
+    return counterparties.filter((item: any) => {
+      const counterpartyName = item.counterparty || item.name || '';
+      const sector = item.sector || '';
+      const conflicts = item.numberOfConflictsDeclared || item.conflicts || 0;
+
+      const matchesSearch = counterpartyName.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesSector = !selectedSector || sector === selectedSector;
       const matchesConflict =
         !selectedConflict ||
-        (selectedConflict === 'has' && item.conflicts > 0) ||
-        (selectedConflict === 'none' && item.conflicts === 0);
+        (selectedConflict === 'has' && conflicts > 0) ||
+        (selectedConflict === 'none' && conflicts === 0);
 
       return matchesSearch && matchesSector && matchesConflict;
     });
-  }, [searchQuery, selectedSector, selectedConflict]);
+  }, [counterparties, searchQuery, selectedSector, selectedConflict]);
 
-  // Pagination
-  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
+  // Pagination - using API pagination
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedData = filteredData.slice(
-    startIndex,
-    startIndex + itemsPerPage
-  );
+  const paginatedData = filteredData;
 
   // Generate page numbers
   const renderPageNumbers = useMemo(() => {
@@ -349,125 +370,152 @@ const CounterpartiesPage = () => {
 
             {/* Table Body - Desktop */}
             <VStack gap={2} display={{ base: 'none', md: 'flex' }}>
-              {paginatedData.map((item, index) => (
-                <Box
-                  key={item.id}
-                  bg={index % 2 === 0 ? 'white' : '#F9FAFB'}
-                  borderRadius="8px"
-                  px={4}
-                  py={3}
-                  w="100%"
-                  _hover={{ bg: '#F5F7FA' }}
-                  transition="background 0.2s"
-                >
-                  <HStack>
-                    <Box w="60px">
-                      <Text fontSize="13px" color="#333">
-                        {startIndex + index + 1}
-                      </Text>
-                    </Box>
-                    <Box flex="1">
-                      <Text fontSize="13px" color="#333">
-                        {item.name}
-                      </Text>
-                    </Box>
-                    <Box flex="1">
-                      <Text fontSize="13px" color="#333">
-                        {item.sector}
-                      </Text>
-                    </Box>
-                    <Box w="200px" textAlign="center">
-                      <ChakraButton
-                        bg="#227CBF"
-                        color="white"
-                        fontSize="13px"
-                        fontWeight="500"
-                        px={5}
-                        h="36px"
-                        borderRadius="6px"
-                        _hover={{ bg: '#1B6AA3' }}
-                        onClick={() => {
-                          setSelectedCounterparty(item);
-                          setIsDisclaimerOpen(true);
-                        }}
-                      >
-                        Check Conflict
-                      </ChakraButton>
-                    </Box>
-                    <Box w="100px" textAlign="center">
-                      <Text fontSize="13px" color="#333">
-                        {item.conflicts}
-                      </Text>
-                    </Box>
-                  </HStack>
+              {isLoadingCounterparties ? (
+                <Box textAlign="center" py={8}>
+                  <Text color="#666">Loading counterparties...</Text>
                 </Box>
-              ))}
+              ) : paginatedData.length === 0 ? (
+                <Box textAlign="center" py={8}>
+                  <Text color="#666">No counterparties found</Text>
+                </Box>
+              ) : (
+                paginatedData.map((item: any, index) => {
+                  const counterpartyName = item.counterparty || item.name || 'Unknown';
+                  const sector = item.sector || 'N/A';
+                  const conflicts = item.numberOfConflictsDeclared || item.conflicts || 0;
+                  const declarants = item.conflictDeclarantNames || item.employees || [];
+
+                  return (
+                    <Box
+                      key={item.id || index}
+                      bg={index % 2 === 0 ? 'white' : '#F9FAFB'}
+                      borderRadius="8px"
+                      px={4}
+                      py={3}
+                      w="100%"
+                      _hover={{ bg: '#F5F7FA' }}
+                      transition="background 0.2s"
+                    >
+                      <HStack>
+                        <Box w="60px">
+                          <Text fontSize="13px" color="#333">
+                            {startIndex + index + 1}
+                          </Text>
+                        </Box>
+                        <Box flex="1">
+                          <Text fontSize="13px" color="#333">
+                            {counterpartyName}
+                          </Text>
+                        </Box>
+                        <Box flex="1">
+                          <Text fontSize="13px" color="#333">
+                            {sector}
+                          </Text>
+                        </Box>
+                        <Box w="200px" textAlign="center">
+                          <ChakraButton
+                            bg="#227CBF"
+                            color="white"
+                            fontSize="13px"
+                            fontWeight="500"
+                            px={5}
+                            h="36px"
+                            borderRadius="6px"
+                            _hover={{ bg: '#1B6AA3' }}
+                            onClick={() => handleViewDetails({ ...item, name: counterpartyName, employees: declarants, conflicts })}
+                          >
+                            View Details
+                          </ChakraButton>
+                        </Box>
+                        <Box w="100px" textAlign="center">
+                          <Text fontSize="13px" color="#333">
+                            {conflicts}
+                          </Text>
+                        </Box>
+                      </HStack>
+                    </Box>
+                  );
+                })
+              )}
             </VStack>
 
-            {/* Table Body - Mobile Cards */}
+            {/* Mobile View */}
             <VStack gap={3} display={{ base: 'flex', md: 'none' }}>
-              {paginatedData.map((item, index) => (
-                <Box
-                  key={item.id}
-                  bg="white"
-                  borderRadius="8px"
-                  p={4}
-                  w="100%"
-                  boxShadow="sm"
-                >
-                  <VStack align="stretch" gap={2}>
-                    <HStack justify="space-between">
-                      <Text fontSize="12px" fontWeight="600" color="#666">
-                        S/N:
-                      </Text>
-                      <Text fontSize="13px" color="#333">
-                        {startIndex + index + 1}
-                      </Text>
-                    </HStack>
-                    <HStack justify="space-between">
-                      <Text fontSize="12px" fontWeight="600" color="#666">
-                        Counterparty:
-                      </Text>
-                      <Text fontSize="13px" color="#333">
-                        {item.name}
-                      </Text>
-                    </HStack>
-                    <HStack justify="space-between">
-                      <Text fontSize="12px" fontWeight="600" color="#666">
-                        Sector:
-                      </Text>
-                      <Text fontSize="13px" color="#333">
-                        {item.sector}
-                      </Text>
-                    </HStack>
-                    <HStack justify="space-between">
-                      <Text fontSize="12px" fontWeight="600" color="#666">
-                        Conflicts:
-                      </Text>
-                      <Text fontSize="13px" color="#333">
-                        {item.conflicts}
-                      </Text>
-                    </HStack>
-                    <ChakraButton
-                      bg="#227CBF"
-                      color="white"
-                      fontSize="13px"
-                      fontWeight="500"
-                      w="100%"
-                      h="36px"
-                      borderRadius="6px"
-                      _hover={{ bg: '#1B6AA3' }}
-                      mt={2}
-                      onClick={() => {
-                        setSelectedCounterparty(item);
-                        setIsDisclaimerOpen(true);
-                      }}
-                    >
-                      Check Conflict
-                    </ChakraButton>
-                  </VStack>
+              {isLoadingCounterparties ? (
+                <Box textAlign="center" py={8}>
+                  <Text color="#666">Loading counterparties...</Text>
                 </Box>
-              ))}
+              ) : paginatedData.length === 0 ? (
+                <Box textAlign="center" py={8}>
+                  <Text color="#666">No counterparties found</Text>
+                </Box>
+              ) : (
+                paginatedData.map((item: any, index) => {
+                  const counterpartyName = item.counterparty || item.name || 'Unknown';
+                  const sector = item.sector || 'N/A';
+                  const conflicts = item.numberOfConflictsDeclared || item.conflicts || 0;
+                  const declarants = item.conflictDeclarantNames || item.employees || [];
+
+                  return (
+                    <Box
+                      key={item.id || index}
+                      bg="white"
+                      borderRadius="8px"
+                      p={4}
+                      w="100%"
+                      boxShadow="sm"
+                    >
+                      <VStack align="stretch" gap={3}>
+                        <HStack justify="space-between">
+                          <Text fontSize="12px" fontWeight="600" color="#666">
+                            S/N:
+                          </Text>
+                          <Text fontSize="13px" color="#333">
+                            {startIndex + index + 1}
+                          </Text>
+                        </HStack>
+                        <HStack justify="space-between">
+                          <Text fontSize="12px" fontWeight="600" color="#666">
+                            Counterparty:
+                          </Text>
+                          <Text fontSize="13px" color="#333">
+                            {counterpartyName}
+                          </Text>
+                        </HStack>
+                        <HStack justify="space-between">
+                          <Text fontSize="12px" fontWeight="600" color="#666">
+                            Sector:
+                          </Text>
+                          <Text fontSize="13px" color="#333">
+                            {sector}
+                          </Text>
+                        </HStack>
+                        <HStack justify="space-between">
+                          <Text fontSize="12px" fontWeight="600" color="#666">
+                            Conflicts:
+                          </Text>
+                          <Text fontSize="13px" color="#333">
+                            {conflicts}
+                          </Text>
+                        </HStack>
+                        <ChakraButton
+                          bg="#227CBF"
+                          color="white"
+                          fontSize="13px"
+                          fontWeight="500"
+                          w="100%"
+                          h="40px"
+                          borderRadius="6px"
+                          _hover={{ bg: '#1B6AA3' }}
+                          onClick={() => handleViewDetails({ ...item, name: counterpartyName, employees: declarants, conflicts })}
+                        >
+                          View Details
+                        </ChakraButton>
+                      </VStack>
+                    </Box>
+                  );
+                })
+              )}
             </VStack>
           </Box>
 
@@ -504,7 +552,7 @@ const CounterpartiesPage = () => {
                 </ChakraSelect.Content>
               </ChakraSelect.Root>
               <Text fontSize="13px" color="#666">
-                out of {filteredData.length}
+                out of {totalRecords}
               </Text>
             </HStack>
 
@@ -640,7 +688,7 @@ const CounterpartiesPage = () => {
         </Box>
       )}
 
-      {/* Conflict Statement Modal */}
+      {/* Conflict Declaration Details Modal */}
       {showStatement && selectedCounterparty && (
         <Box
           position="fixed"
@@ -665,20 +713,21 @@ const CounterpartiesPage = () => {
             onClick={(e) => e.stopPropagation()}
           >
             <VStack gap={4} align="stretch">
-              {/* Header with Logo and ID */}
+              {/* Header with Logo and Year */}
               <HStack justify="space-between">
                 <Box>
-                  {/* Logo placeholder - replace with actual logo */}
                   <Text fontSize="20px" fontWeight="700" color="#2E7BB4">
                     Infra<Text as="span" color="#47B65C">Credit</Text>
                   </Text>
                 </Box>
-                <Text fontSize="12px" color="#666">ID: 1254KD</Text>
+                <Text fontSize="12px" color="#666">
+                  Year: {selectedYear}
+                </Text>
               </HStack>
 
               {/* Title */}
               <Heading fontSize="20px" fontWeight="600" color="#2C3E50" textAlign="center">
-                Conflict of Interest Statement
+                Conflict of Interest Declaration
               </Heading>
 
               {/* Counterparty Name */}
@@ -688,7 +737,7 @@ const CounterpartiesPage = () => {
 
               {/* Conflict Status */}
               <Box textAlign="center">
-                {selectedCounterparty.hasConflict ? (
+                {selectedCounterparty.conflicts > 0 ? (
                   <Box
                     bg="#FF6B47"
                     color="white"
@@ -699,7 +748,7 @@ const CounterpartiesPage = () => {
                     borderRadius="6px"
                     display="inline-block"
                   >
-                    A Conflict of Interest exists.
+                    {selectedCounterparty.conflicts} Conflict{selectedCounterparty.conflicts > 1 ? 's' : ''} Declared
                   </Box>
                 ) : (
                   <Box
@@ -712,42 +761,60 @@ const CounterpartiesPage = () => {
                     borderRadius="6px"
                     display="inline-block"
                   >
-                    No Conflict of Interest exists.
+                    No Conflict of Interest Declared
                   </Box>
                 )}
               </Box>
 
               {/* Employee Names (only show when conflict exists) */}
-              {selectedCounterparty.hasConflict && selectedCounterparty.employees && selectedCounterparty.employees.length > 0 && (
-                <Box display="flex" flexWrap="wrap" gap={2} justifyContent="center" mt={2}>
-                  {selectedCounterparty.employees.map((employee, index) => (
-                    <Box
-                      key={index}
-                      bg="#D4E6F5"
-                      color="#2E7BB4"
-                      fontSize="13px"
-                      fontWeight="500"
-                      py={1.5}
-                      px={3}
-                      borderRadius="6px"
-                    >
-                      {employee}
-                    </Box>
-                  ))}
-                </Box>
+              {selectedCounterparty.conflicts > 0 && selectedCounterparty.employees && selectedCounterparty.employees.length > 0 && (
+                <VStack gap={3} mt={2}>
+                  <Text fontSize="13px" fontWeight="600" color="#666">
+                    Employees who declared conflicts:
+                  </Text>
+                  <Box display="flex" flexWrap="wrap" gap={2} justifyContent="center">
+                    {selectedCounterparty.employees.map((employee: string, index: number) => (
+                      <Box
+                        key={index}
+                        bg="#D4E6F5"
+                        color="#2E7BB4"
+                        fontSize="13px"
+                        fontWeight="500"
+                        py={1.5}
+                        px={3}
+                        borderRadius="6px"
+                      >
+                        {employee}
+                      </Box>
+                    ))}
+                  </Box>
+                </VStack>
               )}
 
-              {/* Checked By Info */}
-              <VStack gap={0.5}>
-                <Text fontSize="13px" color="#666">
-                  Checked by: <Text as="span" color="#333" fontWeight="500">Tunde Bakare</Text>
-                </Text>
-                <Text fontSize="13px" color="#666">
-                  Date/Time: <Text as="span" color="#333" fontWeight="500">7th July, 2025; 11:25pm</Text>
-                </Text>
-              </VStack>
+              {/* Declaration Summary */}
+              <Box
+                bg="#F9FAFB"
+                borderRadius="8px"
+                p={4}
+                mt={2}
+              >
+                <VStack gap={2} align="stretch">
+                  <HStack justify="space-between">
+                    <Text fontSize="13px" color="#666">Total Declarations:</Text>
+                    <Text fontSize="13px" fontWeight="600" color="#333">
+                      {selectedCounterparty.conflicts}
+                    </Text>
+                  </HStack>
+                  <HStack justify="space-between">
+                    <Text fontSize="13px" color="#666">Sector:</Text>
+                    <Text fontSize="13px" fontWeight="600" color="#333">
+                      {selectedCounterparty.sector || 'N/A'}
+                    </Text>
+                  </HStack>
+                </VStack>
+              </Box>
 
-              {/* Close button for all cases */}
+              {/* Close button */}
               <ChakraButton
                 w="100%"
                 bg="#E6E7EC"

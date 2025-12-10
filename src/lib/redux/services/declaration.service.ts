@@ -1,4 +1,5 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
+import Cookies from 'js-cookie';
 
 import { baseUrl } from '../baseUrl';
 import type { RootState } from '../store';
@@ -13,7 +14,11 @@ export const declarationApi = createApi({
   baseQuery: fetchBaseQuery({
     baseUrl: `${baseUrl}`,
     prepareHeaders: (headers, { getState }) => {
-      const { token } = (getState() as RootState).auth;
+      // Try to get token from Redux state first, then from cookies
+      const { token: stateToken } = (getState() as RootState).auth;
+      const cookieToken = Cookies.get('token');
+      const token = stateToken || cookieToken;
+
       if (token) {
         headers.set('authorization', `Bearer ${token}`);
       }
@@ -21,30 +26,89 @@ export const declarationApi = createApi({
       return headers;
     },
   }),
-  tagTypes: ['Declarations', 'DeclarationHistory', 'Policy'],
+  tagTypes: ['Declarations', 'DeclarationHistory', 'Policy', 'UserDeclarationStatus', 'DashboardMetrics'],
   endpoints: (builder) => ({
     // Get all declarations (admin view)
     getDeclarations: builder.query<
-      { data: IDeclaration[]; total: number; page: number; limit: number },
+      {
+        data: {
+          currentPage: number;
+          pageSize: number;
+          totalRecords: number;
+          totalPages: number;
+          result: Array<{
+            id: string;
+            userId: string;
+            userName: string;
+            userEmail: string;
+            departmentName: string;
+            year: number;
+            submittedAt: string;
+            status: number;
+            statusName: string;
+            totalCounterparties: number;
+            conflictCount: number;
+            asssessmentDtos: Array<{
+              id: string;
+              hasConflict: boolean;
+              notes: string;
+              declarationVersion: number;
+              declaration: string;
+              counterparty: string | { id: string; name: string; description: string; createdAt: string };
+            }>;
+            createdAt: string;
+          }>;
+        };
+        message: string;
+        success: boolean;
+      },
       { page?: number; limit?: number; year?: number; status?: string }
     >({
       query: ({ page = 1, limit = 10, year, status }) => {
         const params = new URLSearchParams({
-          page: page.toString(),
-          limit: limit.toString(),
+          CurrentPage: page.toString(),
+          PageSize: limit.toString(),
         });
 
         if (year) params.append('year', year.toString());
         if (status) params.append('status', status);
 
-        return `declarations?${params.toString()}`;
+        return `Declarations?${params.toString()}`;
       },
       providesTags: ['Declarations'],
     }),
 
     // Get declaration by ID
-    getDeclarationById: builder.query<{ data: IDeclaration }, string>({
-      query: (id) => `declarations/${id}`,
+    getDeclarationById: builder.query<
+      {
+        data: {
+          id: string;
+          userId: string;
+          userName: string;
+          userEmail: string;
+          departmentName: string;
+          year: number;
+          submittedAt: string;
+          status: number;
+          statusName: string;
+          totalCounterparties: number;
+          conflictCount: number;
+          asssessmentDtos: Array<{
+            id: string;
+            hasConflict: boolean;
+            notes: string;
+            declarationVersion: number;
+            declaration: string;
+            counterparty: string | { id: string; name: string; description: string; createdAt: string };
+          }>;
+          createdAt: string;
+        };
+        message: string;
+        success: boolean;
+      },
+      string
+    >({
+      query: (id) => `Declarations/${id}`,
       providesTags: (_result, _error, id) => [{ type: 'Declarations', id }],
     }),
 
@@ -61,6 +125,75 @@ export const declarationApi = createApi({
       providesTags: ['DeclarationHistory'],
     }),
 
+    // Get user's declaration history with counterparties
+    getDeclarationHistoryWithCounterparties: builder.query<
+      {
+        data: {
+          currentPage: number;
+          pageSize: number;
+          totalRecords: number;
+          totalPages: number;
+          result: Array<{
+            serialNumber: number;
+            declarationId: string;
+            userId: string;
+            userFullName: string;
+            year: number;
+            submittedAt: string;
+            counterparties: Array<{
+              serialNumber: number;
+              counterparty: string | { id: string; name: string; description: string; createdAt: string };
+              sector: string;
+              hasConflict: boolean;
+            }>;
+          }>;
+        };
+        message: string;
+        success: boolean;
+      },
+      { userId: string; page?: number; pageSize?: number }
+    >({
+      query: ({ userId, page = 1, pageSize = 10 }) => {
+        const params = new URLSearchParams({
+          userId,
+          CurrentPage: page.toString(),
+          PageSize: pageSize.toString(),
+        });
+        return `Declarations/history-with-counterparties?${params.toString()}`;
+      },
+      providesTags: ['DeclarationHistory'],
+    }),
+
+    // Get list of declarants (people who have submitted declarations)
+    getDeclarants: builder.query<
+      {
+        data: {
+          currentPage: number;
+          pageSize: number;
+          totalRecords: number;
+          totalPages: number;
+          result: Array<{
+            serialNumber: number;
+            fullName: string;
+            department: string;
+            date: string;
+          }>;
+        };
+        message: string;
+        success: boolean;
+      },
+      { page?: number; limit?: number }
+    >({
+      query: ({ page = 1, limit = 10 }) => {
+        const params = new URLSearchParams({
+          CurrentPage: page.toString(),
+          PageSize: limit.toString(),
+        });
+        return `Declarations/declarants?${params.toString()}`;
+      },
+      providesTags: ['Declarations'],
+    }),
+
     // Get user's current year declaration
     getCurrentDeclaration: builder.query<
       { data: IDeclaration | null },
@@ -72,15 +205,40 @@ export const declarationApi = createApi({
 
     // Submit/Create a new declaration
     submitDeclaration: builder.mutation<
-      { data: IDeclaration; message: string },
+      {
+        data: {
+          id: string;
+          userId: string;
+          userName: string;
+          userEmail: string;
+          departmentName: string;
+          year: number;
+          submittedAt: string;
+          status: number;
+          statusName: string;
+          totalCounterparties: number;
+          conflictCount: number;
+          asssessmentDtos: Array<{
+            id: string;
+            hasConflict: boolean;
+            notes: string;
+            declarationVersion: number;
+            declaration: string;
+            counterparty: string | { id: string; name: string; description: string; createdAt: string };
+          }>;
+          createdAt: string;
+        };
+        message: string;
+        success: boolean;
+      },
       IDeclarationFormData
     >({
       query: (body) => ({
-        url: 'declarations',
+        url: 'Declarations',
         method: 'POST',
         body,
       }),
-      invalidatesTags: ['Declarations', 'DeclarationHistory'],
+      invalidatesTags: ['Declarations', 'DeclarationHistory', 'UserDeclarationStatus', 'DashboardMetrics'],
     }),
 
     // Update an existing declaration
@@ -96,19 +254,21 @@ export const declarationApi = createApi({
       invalidatesTags: (_result, _error, { id }) => [
         { type: 'Declarations', id },
         'DeclarationHistory',
+        'UserDeclarationStatus',
+        'DashboardMetrics',
       ],
     }),
 
     // Delete a declaration
     deleteDeclaration: builder.mutation<
-      { message: string },
+      { data: string; message: string; success: boolean },
       string
     >({
       query: (id) => ({
-        url: `declarations/${id}`,
+        url: `Declarations/${id}`,
         method: 'DELETE',
       }),
-      invalidatesTags: ['Declarations', 'DeclarationHistory'],
+      invalidatesTags: ['Declarations', 'DeclarationHistory', 'UserDeclarationStatus', 'DashboardMetrics'],
     }),
 
     // Get conflict policy document
@@ -137,6 +297,20 @@ export const declarationApi = createApi({
       }),
     }),
 
+    // Notify compliance department
+    notifyCompliance: builder.mutation<
+      { data: any; message: string; success: boolean },
+      { declarationId: string }
+    >({
+      query: ({ declarationId }) => ({
+        url: `Declarations/notify-compliance/${declarationId}`,
+        method: 'POST',
+      }),
+      invalidatesTags: (_result, _error, { declarationId }) => [
+        { type: 'Declarations', id: declarationId },
+      ],
+    }),
+
     // Get declaration statistics
     getDeclarationStats: builder.query<
       {
@@ -157,6 +331,8 @@ export const {
   useGetDeclarationsQuery,
   useGetDeclarationByIdQuery,
   useGetDeclarationHistoryQuery,
+  useGetDeclarationHistoryWithCounterpartiesQuery,
+  useGetDeclarantsQuery,
   useGetCurrentDeclarationQuery,
   useSubmitDeclarationMutation,
   useUpdateDeclarationMutation,
@@ -164,5 +340,6 @@ export const {
   useGetPolicyDocumentQuery,
   useGetDeclarationCompaniesQuery,
   useDownloadDeclarationCertificateMutation,
+  useNotifyComplianceMutation,
   useGetDeclarationStatsQuery,
 } = declarationApi;

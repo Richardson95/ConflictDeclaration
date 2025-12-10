@@ -9,7 +9,13 @@ import { employeeApi } from './services/employee.service';
 import { declarationApi } from './services/declaration.service';
 import { counterpartyApi } from './services/counterparty.service';
 import { adminApi } from './services/admin.service';
+import { dashboardApi } from './services/dashboard.service';
+import { departmentApi } from './services/department.service';
+import { sectorApi } from './services/sector.service';
 import authReducer from './slices/authSlice';
+import { authErrorMiddleware } from './middleware/authErrorMiddleware';
+import { crossApiInvalidationMiddleware } from './middleware/crossApiInvalidation';
+import { tokenRefreshMiddleware } from './middleware/tokenRefreshMiddleware';
 
 const rootReducer = combineReducers({
   auth: authReducer,
@@ -18,17 +24,26 @@ const rootReducer = combineReducers({
   [declarationApi.reducerPath]: declarationApi.reducer,
   [counterpartyApi.reducerPath]: counterpartyApi.reducer,
   [adminApi.reducerPath]: adminApi.reducer,
+  [dashboardApi.reducerPath]: dashboardApi.reducer,
+  [departmentApi.reducerPath]: departmentApi.reducer,
+  [sectorApi.reducerPath]: sectorApi.reducer,
 });
 
 export const store = configureStore({
   reducer: rootReducer,
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware().concat([
+      tokenRefreshMiddleware,
+      authErrorMiddleware,
+      crossApiInvalidationMiddleware,
       authApi.middleware,
       employeeApi.middleware,
       declarationApi.middleware,
       counterpartyApi.middleware,
       adminApi.middleware,
+      dashboardApi.middleware,
+      departmentApi.middleware,
+      sectorApi.middleware,
     ]),
 });
 
