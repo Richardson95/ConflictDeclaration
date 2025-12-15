@@ -34,23 +34,90 @@ const DeclarationHistory = () => {
   const { data: currentUserData, isLoading: isLoadingUser } = useGetCurrentUserQuery();
   const userId = currentUserData?.data?.id || '';
 
-  // Fetch declaration history from API
+  // Fetch declaration history from API - fetch all records for client-side filtering
   const { data, isLoading: isLoadingHistory, error } = useGetDeclarationHistoryWithCounterpartiesQuery({
     userId,
-    page: currentPage,
-    pageSize: itemsPerPage,
+    page: 1,
+    pageSize: 1000, // Fetch all declarations for client-side year filtering
   }, {
     skip: !userId, // Skip the query if userId is not available
   });
 
   const isLoading = isLoadingUser || isLoadingHistory;
 
-  const declarations: IDeclarationWithCounterparties[] = useMemo(() => {
+  // Format date for display
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const options: Intl.DateTimeFormatOptions = {
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric'
+    };
+    return date.toLocaleDateString('en-US', options);
+  };
+
+  // Get all declarations from API
+  const allDeclarations: IDeclarationWithCounterparties[] = useMemo(() => {
     return data?.data.result || [];
   }, [data]);
 
-  const totalRecords = data?.data.totalRecords || 0;
-  const totalPages = data?.data.totalPages || 1;
+  // Filter declarations based on year and date search
+  const declarations = useMemo(() => {
+    let filtered = allDeclarations;
+
+    // Filter by selected year
+    if (selectedYear) {
+      filtered = filtered.filter((declaration) => {
+        const declarationYear = new Date(declaration.submittedAt).getFullYear();
+        return declarationYear === parseInt(selectedYear);
+      });
+    }
+
+    // Filter by date search
+    if (dateSearch.trim()) {
+      filtered = filtered.filter((declaration) => {
+        const formattedDate = formatDate(declaration.submittedAt).toLowerCase();
+        return formattedDate.includes(dateSearch.toLowerCase());
+      });
+    }
+
+    return filtered;
+  }, [allDeclarations, selectedYear, dateSearch]);
+
+  const totalRecords = declarations.length;
+  const totalPages = Math.max(1, Math.ceil(declarations.length / itemsPerPage));
+
+  // Paginate filtered declarations
+  const paginatedDeclarations = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return declarations.slice(startIndex, endIndex);
+  }, [declarations, currentPage, itemsPerPage]);
+
+  // Reset to page 1 if current page exceeds total pages after filtering
+  React.useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(1);
+    }
+  }, [totalPages, currentPage]);
+
+  // Reset to page 1 when year filter changes
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedYear]);
+
+  // Generate appropriate empty state message
+  const getEmptyStateMessage = () => {
+    if (dateSearch.trim() && selectedYear) {
+      return `No declarations found for "${dateSearch}" in ${selectedYear}.`;
+    } else if (dateSearch.trim()) {
+      return `No declarations found for "${dateSearch}".`;
+    } else if (selectedYear) {
+      return `No declarations found for ${selectedYear}.`;
+    } else {
+      return 'No declarations found.';
+    }
+  };
 
   const yearOptions = [
     { label: currentYear.toString(), value: currentYear.toString() },
@@ -74,17 +141,6 @@ const DeclarationHistory = () => {
     itemToString: (item) => item.label,
     itemToValue: (item) => item.value,
   });
-
-  // Format date for display
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    const options: Intl.DateTimeFormatOptions = {
-      day: '2-digit',
-      month: 'long',
-      year: 'numeric'
-    };
-    return date.toLocaleDateString('en-US', options);
-  };
 
   const renderPageNumbers = useMemo(() => {
     const pages = [];
@@ -308,13 +364,13 @@ const DeclarationHistory = () => {
             <Box textAlign="center" py={8}>
               <Text color="red.500">Error loading declarations. Please try again.</Text>
             </Box>
-          ) : declarations.length === 0 ? (
+          ) : paginatedDeclarations.length === 0 ? (
             <Box textAlign="center" py={8}>
-              <Text color="#666">No declarations found.</Text>
+              <Text color="#666" fontSize="15px">{getEmptyStateMessage()}</Text>
             </Box>
           ) : (
             <VStack gap={2} align="stretch">
-              {declarations.map((item) => (
+              {paginatedDeclarations.map((item) => (
                 <Box key={item.declarationId} bg="white" borderRadius="8px" px={6} py={3.5} boxShadow="sm" _hover={{ bg: '#F8F9FA' }}>
                   <HStack gap={0}>
                     <Box w="80px"><Text fontSize="14px" color="#333">{item.serialNumber}</Text></Box>
@@ -351,12 +407,12 @@ const DeclarationHistory = () => {
             <Box textAlign="center" py={8}>
               <Text color="red.500">Error loading declarations. Please try again.</Text>
             </Box>
-          ) : declarations.length === 0 ? (
+          ) : paginatedDeclarations.length === 0 ? (
             <Box textAlign="center" py={8}>
-              <Text color="#666">No declarations found.</Text>
+              <Text color="#666" fontSize="15px">{getEmptyStateMessage()}</Text>
             </Box>
           ) : (
-            declarations.map((item, index) => (
+            paginatedDeclarations.map((item, index) => (
               <Box key={item.declarationId} bg="transparent" borderRadius="none" p={0} boxShadow="none">
                 <VStack align="stretch" gap={6}>
                   <VStack align="stretch" gap={3} bg="#F8FAFC" p={4} borderRadius="8px" borderLeft="3px solid #227CBF">
@@ -384,7 +440,7 @@ const DeclarationHistory = () => {
                     View Declaration
                   </ChakraButton>
                 </VStack>
-                {index < declarations.length - 1 && (
+                {index < paginatedDeclarations.length - 1 && (
                   <Box h="1px" bg="#D1D5DB" mt={8} />
                 )}
               </Box>

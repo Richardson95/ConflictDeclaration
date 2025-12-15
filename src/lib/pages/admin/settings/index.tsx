@@ -54,7 +54,6 @@ import {
 
 import {
   useGetUserActivitiesQuery,
-  useGetAuditLogsQuery,
 } from '@/lib/redux/services/admin.service';
 
 const SettingsPage = () => {
@@ -134,7 +133,7 @@ const SettingsPage = () => {
   });
 
   // Fetch ALL counterparties for client-side filtering
-  const { data: counterpartiesData, isLoading: isLoadingCounterparties } = useGetCounterpartyConflictSummaryQuery({
+  const { data: counterpartiesData, isLoading: isLoadingCounterparties, refetch: refetchCounterparties } = useGetCounterpartyConflictSummaryQuery({
     page: 1,
     limit: 10000, // Fetch all counterparties
   });
@@ -152,11 +151,6 @@ const SettingsPage = () => {
   const { data: activityLogsData, isLoading: isLoadingActivityLogs } = useGetUserActivitiesQuery({
     page: activeTab === 'Activity log' ? currentPage : 1,
     limit: activeTab === 'Activity log' ? itemsPerPage : 10,
-  });
-
-  const { data: auditLogsData, isLoading: isLoadingAuditLogs } = useGetAuditLogsQuery({
-    page: activeTab === 'Audit Trail' ? currentPage : 1,
-    limit: activeTab === 'Audit Trail' ? itemsPerPage : 10,
   });
 
   // API Mutations
@@ -198,7 +192,7 @@ const SettingsPage = () => {
     }
   }, [selectedSector, searchQuery, activeTab]);
 
-  const tabs = ['Employees', 'Departments', 'Counterparties', 'Sectors', 'Activity log', 'Audit Trail'];
+  const tabs = ['Employees', 'Departments', 'Counterparties', 'Sectors', 'Activity log'];
 
   // Get current tab data
   const getCurrentTabData = () => {
@@ -242,13 +236,6 @@ const SettingsPage = () => {
           totalRecords: activityLogsData?.data?.totalRecords || 0,
           totalPages: activityLogsData?.data?.totalPages || 1,
           isLoading: isLoadingActivityLogs,
-        };
-      case 'Audit Trail':
-        return {
-          data: auditLogsData?.data?.result || [],
-          totalRecords: auditLogsData?.data?.totalRecords || 0,
-          totalPages: auditLogsData?.data?.totalPages || 1,
-          isLoading: isLoadingAuditLogs,
         };
       default:
         return { data: [], totalRecords: 0, totalPages: 1, isLoading: false };
@@ -491,6 +478,8 @@ const SettingsPage = () => {
         toaster.success({ title: 'Counterparty deleted successfully' });
         setShowDeleteCounterpartyModal(false);
         setCounterpartyToDelete(null);
+        // Refetch counterparties to remove the deleted one immediately
+        refetchCounterparties();
       } catch (error: any) {
         toaster.error({ title: 'Error', description: error?.data?.message || 'Failed to delete counterparty' });
       }
@@ -508,6 +497,8 @@ const SettingsPage = () => {
       toaster.success({ title: 'Counterparty created successfully' });
       setShowAddCounterpartyModal(false);
       setNewCounterparty({ name: '', sectorId: '' });
+      // Refetch counterparties to show the new one immediately
+      refetchCounterparties();
     } catch (error: any) {
       toaster.error({ title: 'Error', description: error?.data?.message || 'Failed to create counterparty' });
     }
@@ -525,6 +516,8 @@ const SettingsPage = () => {
       setShowEditCounterpartyModal(false);
       setCounterpartyToEdit(null);
       setNewCounterparty({ name: '', sectorId: '' });
+      // Refetch counterparties to show the updated one immediately
+      refetchCounterparties();
     } catch (error: any) {
       toaster.error({ title: 'Error', description: error?.data?.message || 'Failed to update counterparty' });
     }
@@ -711,18 +704,21 @@ const SettingsPage = () => {
                     <ChakraSelect.Trigger bg="white" borderColor="#D1D5DB" borderRadius="6px" height="40px">
                       <ChakraSelect.ValueText placeholder="Department" />
                     </ChakraSelect.Trigger>
-                    <ChakraSelect.Content
-                      bg="white"
-                      borderRadius="8px"
-                      boxShadow="lg"
-                      zIndex={1500}
-                    >
-                      {departmentOptions.map((option: any) => (
-                        <ChakraSelect.Item key={option.value} item={option}>
-                          {option.label}
-                        </ChakraSelect.Item>
-                      ))}
-                    </ChakraSelect.Content>
+                    <ChakraSelect.Positioner>
+                      <ChakraSelect.Content
+                        bg="white"
+                        borderRadius="8px"
+                        boxShadow="lg"
+                        zIndex={1500}
+                        position="absolute"
+                      >
+                        {departmentOptions.map((option: any) => (
+                          <ChakraSelect.Item key={option.value} item={option}>
+                            {option.label}
+                          </ChakraSelect.Item>
+                        ))}
+                      </ChakraSelect.Content>
+                    </ChakraSelect.Positioner>
                   </ChakraSelect.Root>
 
                   <ChakraSelect.Root
@@ -740,18 +736,21 @@ const SettingsPage = () => {
                     <ChakraSelect.Trigger bg="white" borderColor="#D1D5DB" borderRadius="6px" height="40px">
                       <ChakraSelect.ValueText placeholder="Status" />
                     </ChakraSelect.Trigger>
-                    <ChakraSelect.Content
-                      bg="white"
-                      borderRadius="8px"
-                      boxShadow="lg"
-                      zIndex={1500}
-                    >
-                      {statusOptions.map((option) => (
-                        <ChakraSelect.Item key={option.value} item={option}>
-                          {option.label}
-                        </ChakraSelect.Item>
-                      ))}
-                    </ChakraSelect.Content>
+                    <ChakraSelect.Positioner>
+                      <ChakraSelect.Content
+                        bg="white"
+                        borderRadius="8px"
+                        boxShadow="lg"
+                        zIndex={1500}
+                        position="absolute"
+                      >
+                        {statusOptions.map((option) => (
+                          <ChakraSelect.Item key={option.value} item={option}>
+                            {option.label}
+                          </ChakraSelect.Item>
+                        ))}
+                      </ChakraSelect.Content>
+                    </ChakraSelect.Positioner>
                   </ChakraSelect.Root>
                 </>
               )}
@@ -772,24 +771,27 @@ const SettingsPage = () => {
                   <ChakraSelect.Trigger bg="white" borderColor="#D1D5DB" borderRadius="6px" height="40px">
                     <ChakraSelect.ValueText placeholder="Sector" />
                   </ChakraSelect.Trigger>
-                  <ChakraSelect.Content
-                    bg="white"
-                    borderRadius="8px"
-                    boxShadow="lg"
-                    zIndex={1500}
-                  >
-                    {sectorOptions.map((option: any) => (
-                      <ChakraSelect.Item key={option.value} item={option}>
-                        {option.label}
-                      </ChakraSelect.Item>
-                    ))}
-                  </ChakraSelect.Content>
+                  <ChakraSelect.Positioner>
+                    <ChakraSelect.Content
+                      bg="white"
+                      borderRadius="8px"
+                      boxShadow="lg"
+                      zIndex={1500}
+                      position="absolute"
+                    >
+                      {sectorOptions.map((option: any) => (
+                        <ChakraSelect.Item key={option.value} item={option}>
+                          {option.label}
+                        </ChakraSelect.Item>
+                      ))}
+                    </ChakraSelect.Content>
+                  </ChakraSelect.Positioner>
                 </ChakraSelect.Root>
               )}
             </HStack>
 
             {/* Add Button */}
-            {activeTab !== 'Activity log' && activeTab !== 'Audit Trail' && (
+            {activeTab !== 'Activity log' && (
               <Button
                 bg="#227CBF"
                 color="white"
@@ -806,7 +808,11 @@ const SettingsPage = () => {
                   else if (activeTab === 'Sectors') setShowAddSectorModal(true);
                 }}
               >
-                + Add {activeTab === 'Employees' ? 'User' : activeTab.slice(0, -1)}
+                + Add {
+                  activeTab === 'Employees' ? 'User' :
+                  activeTab === 'Counterparties' ? 'Counterparty' :
+                  activeTab.slice(0, -1)
+                }
               </Button>
             )}
           </HStack>
@@ -913,35 +919,6 @@ const SettingsPage = () => {
                         <Box flex="2">
                           <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
                             Action
-                          </Text>
-                        </Box>
-                        <Box flex="1">
-                          <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
-                            Date/Time
-                          </Text>
-                        </Box>
-                      </>
-                    )}
-                    {activeTab === 'Audit Trail' && (
-                      <>
-                        <Box flex="1">
-                          <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
-                            User
-                          </Text>
-                        </Box>
-                        <Box flex="1">
-                          <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
-                            Action
-                          </Text>
-                        </Box>
-                        <Box flex="1">
-                          <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
-                            Resource
-                          </Text>
-                        </Box>
-                        <Box w="100px" textAlign="center">
-                          <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
-                            Status
                           </Text>
                         </Box>
                         <Box flex="1">
@@ -1181,54 +1158,6 @@ const SettingsPage = () => {
                             </Box>
                           </>
                         )}
-
-                        {activeTab === 'Audit Trail' && (
-                          <>
-                            <Box flex="1">
-                              <Text fontSize="13px" color="#333">
-                                {item.name || item.userEmail || 'N/A'}
-                              </Text>
-                            </Box>
-                            <Box flex="1">
-                              <Text fontSize="13px" color="#333">
-                                {item.action || 'N/A'}
-                              </Text>
-                            </Box>
-                            <Box flex="1">
-                              <Text fontSize="13px" color="#333">
-                                {item.resource || 'N/A'}
-                              </Text>
-                            </Box>
-                            <Box w="100px" textAlign="center">
-                              <Box
-                                as="span"
-                                px={3}
-                                py={1}
-                                borderRadius="12px"
-                                bg={item.success ? '#E8F5E9' : '#FFEBEE'}
-                                color={item.success ? '#2E7D32' : '#C62828'}
-                                fontSize="12px"
-                                fontWeight="500"
-                              >
-                                {item.success ? 'Success' : 'Failed'}
-                              </Box>
-                            </Box>
-                            <Box flex="1">
-                              <Text fontSize="13px" color="#333">
-                                {item.createdAt
-                                  ? new Date(item.createdAt).toLocaleString('en-US', {
-                                      day: 'numeric',
-                                      month: 'short',
-                                      year: 'numeric',
-                                      hour: 'numeric',
-                                      minute: '2-digit',
-                                      hour12: true,
-                                    })
-                                  : 'N/A'}
-                              </Text>
-                            </Box>
-                          </>
-                        )}
                       </HStack>
 
                       {/* Mobile view */}
@@ -1332,13 +1261,15 @@ const SettingsPage = () => {
                 <ChakraSelect.Trigger bg="white" borderColor="#E6E7EC" borderRadius="6px">
                   <ChakraSelect.ValueText />
                 </ChakraSelect.Trigger>
-                <ChakraSelect.Content bg="white" borderRadius="8px">
-                  {itemsPerPageOptions.map((option) => (
-                    <ChakraSelect.Item key={option.value} item={option}>
-                      {option.label}
-                    </ChakraSelect.Item>
-                  ))}
-                </ChakraSelect.Content>
+                <ChakraSelect.Positioner>
+                  <ChakraSelect.Content bg="white" borderRadius="8px" zIndex={1500} position="absolute">
+                    {itemsPerPageOptions.map((option) => (
+                      <ChakraSelect.Item key={option.value} item={option}>
+                        {option.label}
+                      </ChakraSelect.Item>
+                    ))}
+                  </ChakraSelect.Content>
+                </ChakraSelect.Positioner>
               </ChakraSelect.Root>
               <Text fontSize="13px" color="#666">
                 out of {actualTotalRecords}
@@ -1484,13 +1415,15 @@ const SettingsPage = () => {
                     <ChakraSelect.Trigger bg="white" borderColor="#D1D5DB" borderRadius="6px">
                       <ChakraSelect.ValueText placeholder="Select department" />
                     </ChakraSelect.Trigger>
-                    <ChakraSelect.Content bg="white" borderRadius="8px" boxShadow="lg" zIndex={1500}>
-                      {allDepartmentsData?.data?.result?.map((dept: any) => (
-                        <ChakraSelect.Item key={dept.id} item={{ label: dept.name, value: dept.id }}>
-                          {dept.name}
-                        </ChakraSelect.Item>
-                      ))}
-                    </ChakraSelect.Content>
+                    <ChakraSelect.Positioner>
+                      <ChakraSelect.Content bg="white" borderRadius="8px" boxShadow="lg" zIndex={1500} position="absolute">
+                        {allDepartmentsData?.data?.result?.map((dept: any) => (
+                          <ChakraSelect.Item key={dept.id} item={{ label: dept.name, value: dept.id }}>
+                            {dept.name}
+                          </ChakraSelect.Item>
+                        ))}
+                      </ChakraSelect.Content>
+                    </ChakraSelect.Positioner>
                   </ChakraSelect.Root>
                 </Box>
                 <HStack gap={3} mt={4}>
@@ -1674,13 +1607,15 @@ const SettingsPage = () => {
                     <ChakraSelect.Trigger bg="white" borderColor="#D1D5DB" borderRadius="6px">
                       <ChakraSelect.ValueText placeholder="Select sector" />
                     </ChakraSelect.Trigger>
-                    <ChakraSelect.Content bg="white" borderRadius="8px" boxShadow="lg">
-                      {sectorOptionsForCreate.map((option: any) => (
-                        <ChakraSelect.Item key={option.value} item={option}>
-                          {option.label}
-                        </ChakraSelect.Item>
-                      ))}
-                    </ChakraSelect.Content>
+                    <ChakraSelect.Positioner>
+                      <ChakraSelect.Content bg="white" borderRadius="8px" boxShadow="lg" zIndex={1500} position="absolute">
+                        {sectorOptionsForCreate.map((option: any) => (
+                          <ChakraSelect.Item key={option.value} item={option}>
+                            {option.label}
+                          </ChakraSelect.Item>
+                        ))}
+                      </ChakraSelect.Content>
+                    </ChakraSelect.Positioner>
                   </ChakraSelect.Root>
                 </Box>
                 <HStack gap={3} mt={4}>

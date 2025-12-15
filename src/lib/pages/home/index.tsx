@@ -95,7 +95,6 @@ export const Home = () => {
     try {
       // Simulate API call
       await new Promise((resolve) => setTimeout(resolve, 2000));
-      console.log('Form submitted:', values);
 
       // Show success toast
       toaster.success({
@@ -490,7 +489,7 @@ export const Home = () => {
                             description: 'Click the action button to continue.',
                             action: {
                               label: 'Undo',
-                              onClick: () => console.log('Action clicked!'),
+                              onClick: () => {},
                             },
                           })
                         }

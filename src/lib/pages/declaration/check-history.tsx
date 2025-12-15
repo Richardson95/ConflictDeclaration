@@ -13,6 +13,7 @@ import {
   Portal,
   Button as ChakraButton,
   Input,
+  Spinner,
 } from '@chakra-ui/react';
 import { useRouter } from 'next/navigation';
 import DashboardLayout from '@/lib/layout/DashboardLayout';
@@ -20,6 +21,9 @@ import leftArrow from '@/assets/icons/left-arrow-1.png';
 import { LuDownload } from 'react-icons/lu';
 import infraCreditLogo from '@/assets/logos/logo-1.png';
 import { useGetConflictCheckHistoryDetailQuery } from '@/lib/redux/services/counterparty.service';
+import { toPng } from 'html-to-image';
+import jsPDF from 'jspdf';
+import { toaster } from '@/components/ui/toaster';
 
 const DeclarationCheckHistory = () => {
   const router = useRouter();
@@ -30,6 +34,7 @@ const DeclarationCheckHistory = () => {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [showCertificateModal, setShowCertificateModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState<any>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   // Fetch conflict check history from API
   const { data, isLoading, error } = useGetConflictCheckHistoryDetailQuery({
@@ -45,17 +50,80 @@ const DeclarationCheckHistory = () => {
     setShowCertificateModal(true);
   }, []);
 
-  const handleDownloadReport = () => {
-    if (selectedItem) {
-      console.log('Downloading report for:', selectedItem.counterpartyName || selectedItem.counterparty);
-      alert(`Downloading report for ${selectedItem.counterpartyName || selectedItem.counterparty}`);
+  const handleDownloadReport = async () => {
+    if (!selectedItem) return;
+
+    setIsDownloading(true);
+    try {
+      // Get the certificate content element
+      const certificateElement = document.getElementById('certificate-content');
+
+      if (!certificateElement) {
+        throw new Error('Certificate content not found');
+      }
+
+      // Wait for content to fully render
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Generate PNG from the content using html-to-image
+      const dataUrl = await toPng(certificateElement, {
+        quality: 1.0,
+        pixelRatio: 2,
+        backgroundColor: '#ffffff',
+      });
+
+      // Create an image to get dimensions
+      const img = new window.Image();
+      img.src = dataUrl;
+
+      await new Promise((resolve) => {
+        img.onload = resolve;
+      });
+
+      // Calculate PDF dimensions
+      const imgWidth = 210; // A4 width in mm
+      const pageHeight = 297; // A4 height in mm
+      const imgHeight = (img.height * imgWidth) / img.width;
+
+      // Create PDF
+      const pdf = new jsPDF('p', 'mm', 'a4');
+
+      // Add image to PDF (handle multiple pages if content is long)
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      pdf.addImage(dataUrl, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(dataUrl, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
+      // Download the PDF
+      const counterpartyName = selectedItem.counterparty || selectedItem.checkDetail?.counterparty?.name || 'counterparty';
+      const fileName = `conflict-check-certificate-${counterpartyName.replace(/\s+/g, '-').toLowerCase()}.pdf`;
+      pdf.save(fileName);
+
+      toaster.success({
+        title: 'Report Downloaded',
+        description: `Conflict check certificate downloaded successfully.`,
+      });
+    } catch (error: any) {
+      console.error('PDF Generation Error:', error);
+      toaster.error({
+        title: 'Download Failed',
+        description: 'Unable to download report. Please try again.',
+      });
+    } finally {
+      setIsDownloading(false);
     }
   };
 
   const handleNotifyCompliance = () => {
-    if (selectedItem) {
-      console.log('Notifying compliance for:', selectedItem.counterpartyName || selectedItem.counterparty);
-    }
+    // TODO: Implement compliance notification
   };
 
   const yearOptions = [
@@ -705,7 +773,7 @@ const DeclarationCheckHistory = () => {
             maxH="90vh"
             overflowY="auto"
           >
-            <VStack gap={{ base: 3, md: 4 }} align="stretch">
+            <VStack gap={{ base: 3, md: 4 }} align="stretch" id="certificate-content">
               {/* Header with Logo and ID */}
               <HStack justify="space-between" flexWrap="wrap" gap={2}>
                 <Box>
@@ -811,11 +879,20 @@ const DeclarationCheckHistory = () => {
                   _hover={{ bg: '#3DA550' }}
                   _active={{ bg: '#2E8B3D' }}
                   onClick={handleDownloadReport}
+                  disabled={isDownloading}
+                  opacity={isDownloading ? 0.6 : 1}
                 >
-                  <HStack gap={1} justify="center">
-                    <LuDownload />
-                    <Text>Download</Text>
-                  </HStack>
+                  {isDownloading ? (
+                    <HStack gap={1} justify="center">
+                      <Spinner size="xs" />
+                      <Text>Downloading...</Text>
+                    </HStack>
+                  ) : (
+                    <HStack gap={1} justify="center">
+                      <LuDownload />
+                      <Text>Download</Text>
+                    </HStack>
+                  )}
                 </ChakraButton>
               </HStack>
 
@@ -846,11 +923,20 @@ const DeclarationCheckHistory = () => {
                   _hover={{ bg: '#3DA550' }}
                   _active={{ bg: '#2E8B3D' }}
                   onClick={handleDownloadReport}
+                  disabled={isDownloading}
+                  opacity={isDownloading ? 0.6 : 1}
                 >
-                  <HStack gap={2} justify="center">
-                    <LuDownload />
-                    <Text>Download Report</Text>
-                  </HStack>
+                  {isDownloading ? (
+                    <HStack gap={2} justify="center">
+                      <Spinner size="sm" />
+                      <Text>Downloading...</Text>
+                    </HStack>
+                  ) : (
+                    <HStack gap={2} justify="center">
+                      <LuDownload />
+                      <Text>Download Report</Text>
+                    </HStack>
+                  )}
                 </ChakraButton>
               </HStack>
             </VStack>

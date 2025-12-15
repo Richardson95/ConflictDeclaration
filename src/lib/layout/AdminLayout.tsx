@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Flex,
   HStack,
@@ -25,6 +25,9 @@ import { logOut } from '@/lib/redux/slices/authSlice';
 import { useRef } from 'react';
 import ProfileIcon from '@/assets/icons/profile-icon.png';
 import AdminSidebar from './AdminSidebar';
+import { useGetCurrentUserQuery, useUploadProfileImageMutation } from '@/lib/redux/services/auth.service';
+import { toaster } from '@/components/ui';
+import { hasAdminAccess } from '@/lib/constants/roles';
 
 interface AdminLayoutProps {
   children: React.ReactNode;
@@ -39,6 +42,35 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
   // Get user info from Redux store
   const userInfo = useAppSelector((state) => state.auth.userInfo);
 
+  // Fetch current user data to check role
+  const { data: currentUserData, isLoading } = useGetCurrentUserQuery();
+  const currentUser = currentUserData?.data;
+
+  // Upload profile image mutation
+  const [uploadProfileImage, { isLoading: isUploading }] = useUploadProfileImageMutation();
+
+  // Check if user has admin role and redirect if not
+  useEffect(() => {
+    if (!isLoading && currentUser) {
+      // Check if user has Admin (3) or ITAdmin (4) role
+      if (!hasAdminAccess(currentUser.role)) {
+        toaster.error({
+          title: 'Access Denied',
+          description: 'You do not have permission to access the admin panel.',
+          closable: true,
+        });
+        router.push('/dashboard');
+      }
+    }
+  }, [currentUser, isLoading, router]);
+
+  // Load profile image from current user data
+  useEffect(() => {
+    if (currentUser?.profileImageUrl) {
+      setProfileImage(currentUser.profileImageUrl);
+    }
+  }, [currentUser]);
+
   const handleLogout = () => {
     dispatch(logOut());
     router.push('/auth/login');
@@ -48,14 +80,52 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
     fileInputRef.current?.click();
   };
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
+      // Show preview immediately
       const reader = new FileReader();
       reader.onloadend = () => {
         setProfileImage(reader.result as string);
       };
       reader.readAsDataURL(file);
+
+      // Create FormData and upload file
+      const formData = new FormData();
+      formData.append('file', file);
+
+      try {
+        // Upload to backend
+        const result = await uploadProfileImage(formData).unwrap();
+
+        // Update local state with returned URL
+        if (result?.data?.profileImageUrl) {
+          setProfileImage(result.data.profileImageUrl);
+        }
+
+        toaster.success({
+          title: 'Success',
+          description: 'Profile picture updated successfully',
+          closable: true,
+        });
+      } catch (error: any) {
+        console.error('Failed to upload profile picture:', error);
+        console.error('Error details:', {
+          status: error?.status,
+          data: error?.data,
+          message: error?.data?.message || error?.message,
+        });
+
+        const errorMessage = error?.data?.message || error?.message || 'Failed to update profile picture. Please try again.';
+
+        toaster.error({
+          title: 'Upload Failed',
+          description: errorMessage,
+          closable: true,
+        });
+        // Revert to previous image on error
+        setProfileImage(currentUser?.profileImageUrl || null);
+      }
     }
   };
 
@@ -128,29 +198,7 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
               >
                 <FiBell size={28} />
               </IconButton>
-              <Badge
-                position="absolute"
-                top="8px"
-                right="8px"
-                bg="#5CB85C"
-                color="white"
-                fontSize="9px"
-                borderRadius="full"
-                fontWeight={700}
-                minW="16px"
-                h="16px"
-                px="4px"
-                display="flex"
-                alignItems="center"
-                justifyContent="center"
-                lineHeight="1"
-                transition="all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55)"
-                _groupHover={{
-                  transform: 'scale(1.2)',
-                }}
-              >
-                10
-              </Badge>
+              {/* TODO: Integrate with notification API to show actual count */}
             </Box>
 
             {/* User Profile Dropdown */}
@@ -167,9 +215,13 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
                     <Avatar.Root size="sm">
                       <Avatar.Image
                         src={profileImage || ProfileIcon.src}
-                        alt="Peter Adams"
+                        alt={currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : 'Admin'}
                       />
-                      <Avatar.Fallback bg="#2E7BB4" color="white">PA</Avatar.Fallback>
+                      <Avatar.Fallback bg="#2E7BB4" color="white">
+                        {currentUser
+                          ? `${currentUser.firstName.charAt(0)}${currentUser.lastName.charAt(0)}`.toUpperCase()
+                          : 'A'}
+                      </Avatar.Fallback>
                     </Avatar.Root>
                     <VStack
                       alignItems="flex-start"
@@ -177,10 +229,10 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
                       display={{ base: 'none', md: 'flex' }}
                     >
                       <Text fontSize="14px" fontWeight="600" color="#333">
-                        Peter Adams
+                        {currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : 'Loading...'}
                       </Text>
                       <Text fontSize="12px" color="#666">
-                        IT Admin
+                        {currentUser?.department?.name || 'Admin'}
                       </Text>
                     </VStack>
                     <FiChevronDown color="#666" />

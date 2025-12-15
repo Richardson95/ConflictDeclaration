@@ -52,7 +52,6 @@ const CounterpartiesPage = () => {
 
   const handleNotifyCompliance = useCallback(() => {
     if (selectedCounterparty) {
-      console.log('Notifying compliance for:', selectedCounterparty.counterparty || selectedCounterparty.name);
       setNotificationSent(true);
     }
   }, [selectedCounterparty]);

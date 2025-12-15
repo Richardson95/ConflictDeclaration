@@ -13,26 +13,12 @@ import {
   Portal,
   Button as ChakraButton,
   Input,
+  Spinner,
 } from '@chakra-ui/react';
 import { useRouter, useParams } from 'next/navigation';
 import AdminLayout from '@/lib/layout/AdminLayout';
 import leftArrow from '@/assets/icons/left-arrow-1.png';
-
-// Mock data for declaration history with varied dates
-const generateRandomDate = (index: number) => {
-  const months = ['January', 'February', 'March', 'April', 'May', 'June',
-                  'July', 'August', 'September', 'October', 'November', 'December'];
-  const year = 2024;
-  const monthIndex = Math.floor((index * 7) % 12); // Distribute across months
-  const day = ((index * 13) % 28) + 1; // Days 1-28 to avoid invalid dates
-
-  return `${day} ${months[monthIndex]}, ${year}`;
-};
-
-const mockDeclarations = Array(512).fill(null).map((_, index) => ({
-  id: index + 1,
-  date: generateRandomDate(index),
-}));
+import { useGetEmployeeDeclarationsQuery } from '@/lib/redux/services/employee.service';
 
 const EmployeeDeclarationHistory = () => {
   const router = useRouter();
@@ -44,6 +30,14 @@ const EmployeeDeclarationHistory = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [dateSearch, setDateSearch] = useState<string>('');
+
+  // Fetch employee declarations from API
+  const { data, isLoading, error } = useGetEmployeeDeclarationsQuery({
+    employeeId,
+    year: parseInt(selectedYear),
+  });
+
+  const declarations = data?.data || [];
 
   const yearOptions = [
     { label: currentYear.toString(), value: currentYear.toString() },
@@ -58,10 +52,13 @@ const EmployeeDeclarationHistory = () => {
   });
 
   // Filter declarations by date search
-  const filteredDeclarations = useMemo(() =>
-    mockDeclarations.filter((declaration) =>
-      declaration.date.toLowerCase().includes(dateSearch.toLowerCase())
-    ), [dateSearch]);
+  const filteredDeclarations = useMemo(() => {
+    if (!declarations || !Array.isArray(declarations)) return [];
+    return declarations.filter((declaration: any) => {
+      const dateStr = declaration.date || declaration.submittedDate || '';
+      return dateStr.toLowerCase().includes(dateSearch.toLowerCase());
+    });
+  }, [declarations, dateSearch]);
 
   const totalPages = useMemo(() => Math.ceil(filteredDeclarations.length / itemsPerPage), [filteredDeclarations.length, itemsPerPage]);
   const startIndex = (currentPage - 1) * itemsPerPage;
@@ -272,78 +269,117 @@ const EmployeeDeclarationHistory = () => {
           />
         </Box>
 
-        {/* Table - Desktop View */}
-        <Box display={{ base: 'none', md: 'block' }}>
-          <Box bg="#E2EEFE" borderRadius="8px" px={6} py={3.5} mb={2}>
-            <HStack gap={0}>
-              <Box w="80px"><Text color="#2E7BB4" fontWeight="600" fontSize="13px">S/N</Text></Box>
-              <Box flex="1" textAlign="center"><Text color="#2E7BB4" fontWeight="600" fontSize="13px">Date</Text></Box>
-              <Box w="200px" textAlign="right"><Text color="#2E7BB4" fontWeight="600" fontSize="13px">Action</Text></Box>
-            </HStack>
+        {/* Loading State */}
+        {isLoading && (
+          <Box display="flex" justifyContent="center" alignItems="center" py={10}>
+            <VStack gap={4}>
+              <Spinner size="xl" color="#2E7BB4" />
+              <Text color="#666">Loading declarations...</Text>
+            </VStack>
           </Box>
-          <VStack gap={2} align="stretch">
-            {paginatedData.map((item) => (
-              <Box key={item.id} bg="white" borderRadius="8px" px={6} py={3.5} boxShadow="sm" _hover={{ bg: '#F8F9FA' }}>
-                <HStack gap={0}>
-                  <Box w="80px"><Text fontSize="14px" color="#333">{item.id}</Text></Box>
-                  <Box flex="1" textAlign="center"><Text fontSize="14px" color="#333">{item.date}</Text></Box>
-                  <Box w="200px" textAlign="right">
-                    <ChakraButton
-                      bg="#227CBF"
-                      color="white"
-                      fontSize="13px"
-                      fontWeight="500"
-                      px={5}
-                      h="36px"
-                      borderRadius="6px"
-                      _hover={{ bg: '#1B6AA3' }}
-                      onClick={() => router.push(`/declaration/view?date=${encodeURIComponent(item.date)}`)}
-                    >
-                      View Declaration
+        )}
+
+        {/* Error State */}
+        {error && (
+          <Box textAlign="center" py={10}>
+            <Text color="red.500" fontSize="16px">Error loading declarations. Please try again.</Text>
+          </Box>
+        )}
+
+        {/* Table - Desktop View */}
+        {!isLoading && !error && (
+          <Box display={{ base: 'none', md: 'block' }}>
+            <Box bg="#E2EEFE" borderRadius="8px" px={6} py={3.5} mb={2}>
+              <HStack gap={0}>
+                <Box w="80px"><Text color="#2E7BB4" fontWeight="600" fontSize="13px">S/N</Text></Box>
+                <Box flex="1" textAlign="center"><Text color="#2E7BB4" fontWeight="600" fontSize="13px">Date</Text></Box>
+                <Box w="200px" textAlign="right"><Text color="#2E7BB4" fontWeight="600" fontSize="13px">Action</Text></Box>
+              </HStack>
+            </Box>
+            <VStack gap={2} align="stretch">
+              {paginatedData.length === 0 ? (
+                <Box textAlign="center" py={8} bg="white" borderRadius="8px">
+                  <Text color="#666">No declarations found.</Text>
+                </Box>
+              ) : (
+                paginatedData.map((item: any, index: number) => (
+                  <Box key={item.id || index} bg="white" borderRadius="8px" px={6} py={3.5} boxShadow="sm" _hover={{ bg: '#F8F9FA' }}>
+                    <HStack gap={0}>
+                      <Box w="80px"><Text fontSize="14px" color="#333">{startIndex + index + 1}</Text></Box>
+                      <Box flex="1" textAlign="center">
+                        <Text fontSize="14px" color="#333">
+                          {item.date || item.submittedDate || 'N/A'}
+                        </Text>
+                      </Box>
+                      <Box w="200px" textAlign="right">
+                        <ChakraButton
+                          bg="#227CBF"
+                          color="white"
+                          fontSize="13px"
+                          fontWeight="500"
+                          px={5}
+                          h="36px"
+                          borderRadius="6px"
+                          _hover={{ bg: '#1B6AA3' }}
+                          onClick={() => router.push(`/declaration/view?id=${item.id}`)}
+                        >
+                          View Declaration
                     </ChakraButton>
                   </Box>
                 </HStack>
               </Box>
-            ))}
-          </VStack>
-        </Box>
+                ))
+              )}
+            </VStack>
+          </Box>
+        )}
 
         {/* Mobile Card View */}
-        <VStack gap={8} align="stretch" display={{ base: 'flex', md: 'none' }}>
-          {paginatedData.map((item, index) => (
-            <Box key={item.id} bg="transparent" borderRadius="none" p={0} boxShadow="none">
-              <VStack align="stretch" gap={6}>
-                <VStack align="stretch" gap={3} bg="#F8FAFC" p={4} borderRadius="8px" borderLeft="3px solid #227CBF">
-                  <HStack justify="space-between">
-                    <Text fontSize="13px" color="#666" fontWeight="500">Serial Number</Text>
-                    <Text fontSize="15px" color="#333" fontWeight="600">{item.id}</Text>
-                  </HStack>
-                  <HStack justify="space-between">
-                    <Text fontSize="13px" color="#666" fontWeight="500">Declaration Date</Text>
-                    <Text fontSize="15px" color="#2E7BB4" fontWeight="600">{item.date}</Text>
-                  </HStack>
-                </VStack>
-                <ChakraButton
-                  bg="#227CBF"
-                  color="white"
-                  fontSize="17px"
-                  fontWeight="500"
-                  w="100%"
-                  h="54px"
-                  borderRadius="10px"
-                  _hover={{ bg: '#1B6AA3' }}
-                  _active={{ bg: '#165A8C' }}
-                  onClick={() => router.push(`/declaration/view?date=${encodeURIComponent(item.date)}`)}
-                >
-                  View Declaration
-                </ChakraButton>
-              </VStack>
-              {index < paginatedData.length - 1 && (
-                <Box h="1px" bg="#D1D5DB" mt={8} />
-              )}
-            </Box>
-          ))}
-        </VStack>
+        {!isLoading && !error && (
+          <VStack gap={8} align="stretch" display={{ base: 'flex', md: 'none' }}>
+            {paginatedData.length === 0 ? (
+              <Box textAlign="center" py={8} bg="white" borderRadius="8px">
+                <Text color="#666">No declarations found.</Text>
+              </Box>
+            ) : (
+              paginatedData.map((item: any, index: number) => (
+                <Box key={item.id || index} bg="transparent" borderRadius="none" p={0} boxShadow="none">
+                  <VStack align="stretch" gap={6}>
+                    <VStack align="stretch" gap={3} bg="#F8FAFC" p={4} borderRadius="8px" borderLeft="3px solid #227CBF">
+                      <HStack justify="space-between">
+                        <Text fontSize="13px" color="#666" fontWeight="500">Serial Number</Text>
+                        <Text fontSize="15px" color="#333" fontWeight="600">{startIndex + index + 1}</Text>
+                      </HStack>
+                      <HStack justify="space-between">
+                        <Text fontSize="13px" color="#666" fontWeight="500">Declaration Date</Text>
+                        <Text fontSize="15px" color="#2E7BB4" fontWeight="600">
+                          {item.date || item.submittedDate || 'N/A'}
+                        </Text>
+                      </HStack>
+                    </VStack>
+                    <ChakraButton
+                      bg="#227CBF"
+                      color="white"
+                      fontSize="17px"
+                      fontWeight="500"
+                      w="100%"
+                      h="54px"
+                      borderRadius="10px"
+                      _hover={{ bg: '#1B6AA3' }}
+                      _active={{ bg: '#165A8C' }}
+                      onClick={() => router.push(`/declaration/view?id=${item.id}`)}
+                    >
+                      View Declaration
+                    </ChakraButton>
+                  </VStack>
+                  {index < paginatedData.length - 1 && (
+                    <Box h="1px" bg="#D1D5DB" mt={8} />
+                  )}
+                </Box>
+              ))
+            )}
+          </VStack>
+        )}
 
         {/* Pagination */}
         <Box mt={6} pb={{ base: 4, md: 6 }}>

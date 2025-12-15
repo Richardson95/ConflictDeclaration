@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Heading,
@@ -9,43 +9,152 @@ import {
   Text,
   Image,
   Button as ChakraButton,
+  Spinner,
 } from '@chakra-ui/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import DashboardLayout from '@/lib/layout/DashboardLayout';
 import leftArrow from '@/assets/icons/left-arrow-1.png';
 import { LuDownload } from 'react-icons/lu';
-
-// Mock data for counterparties
-const counterparties = [
-  { id: 1, name: 'Access Bank', sector: 'Banking', hasConflict: false },
-  { id: 2, name: 'Agusto', sector: 'Credit Rating', hasConflict: true },
-  { id: 3, name: 'Auro', sector: 'Technology', hasConflict: false },
-  { id: 4, name: 'Deloitte', sector: 'Professional Services', hasConflict: true },
-  { id: 5, name: 'KPMG', sector: 'Professional Services', hasConflict: false },
-  { id: 6, name: 'First Bank', sector: 'Banking', hasConflict: false },
-  { id: 7, name: 'Stanbic IBTC Asset Management', sector: 'Asset Management', hasConflict: true },
-  { id: 8, name: 'Leadway Asset Management', sector: 'Asset Management', hasConflict: false },
-  { id: 9, name: 'Templars', sector: 'Legal Services', hasConflict: true },
-  { id: 10, name: 'KPMG', sector: 'Professional Services', hasConflict: false },
-  { id: 11, name: 'Bolcom', sector: 'Technology', hasConflict: true },
-  { id: 12, name: 'Fitch', sector: 'Credit Rating', hasConflict: false },
-];
+import { useGetConflictCheckHistoryDetailQuery } from '@/lib/redux/services/counterparty.service';
+import { toPng } from 'html-to-image';
+import jsPDF from 'jspdf';
+import { toaster } from '@/components/ui/toaster';
 
 const DeclarationCertificate = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const id = searchParams.get('id');
+  const serialNumber = searchParams.get('id');
+  const [certificateData, setCertificateData] = useState<any>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
 
-  // Get counterparty data based on ID (cycling through mock data)
-  const counterpartyIndex = id ? (parseInt(id) - 1) % counterparties.length : 0;
-  const counterparty = counterparties[counterpartyIndex];
+  // Fetch conflict check history from API
+  const { data, isLoading } = useGetConflictCheckHistoryDetailQuery({
+    page: 1,
+    limit: 100,
+    year: new Date().getFullYear(),
+  });
 
-  const handleDownloadReport = () => {
-    // Implement download functionality
-    console.log('Downloading report for:', counterparty.name);
-    // In production, this would trigger an actual download
-    alert(`Downloading report for ${counterparty.name}`);
+  // Find the specific check by serial number
+  useEffect(() => {
+    if (data?.data?.result && serialNumber) {
+      const checkItem = data.data.result.find(
+        (item: any) => item.serialNumber === parseInt(serialNumber)
+      );
+      if (checkItem) {
+        setCertificateData(checkItem);
+      }
+    }
+  }, [data, serialNumber]);
+
+  const handleDownloadReport = async () => {
+    if (!certificateData) return;
+
+    setIsDownloading(true);
+    try {
+      // Get the certificate content element
+      const certificateElement = document.getElementById('certificate-content');
+
+      if (!certificateElement) {
+        throw new Error('Certificate content not found');
+      }
+
+      // Wait for content to fully render
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Generate PNG from the content using html-to-image
+      const dataUrl = await toPng(certificateElement, {
+        quality: 1.0,
+        pixelRatio: 2,
+        backgroundColor: '#ffffff',
+      });
+
+      // Create an image to get dimensions
+      const img = new window.Image();
+      img.src = dataUrl;
+
+      await new Promise((resolve) => {
+        img.onload = resolve;
+      });
+
+      // Calculate PDF dimensions
+      const imgWidth = 210; // A4 width in mm
+      const pageHeight = 297; // A4 height in mm
+      const imgHeight = (img.height * imgWidth) / img.width;
+
+      // Create PDF
+      const pdf = new jsPDF('p', 'mm', 'a4');
+
+      // Add image to PDF (handle multiple pages if content is long)
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      pdf.addImage(dataUrl, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(dataUrl, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
+      // Download the PDF
+      const counterpartyName = certificateData.counterparty || 'counterparty';
+      const fileName = `conflict-certificate-${counterpartyName.replace(/\s+/g, '-').toLowerCase()}.pdf`;
+      pdf.save(fileName);
+
+      toaster.success({
+        title: 'Report Downloaded',
+        description: `Conflict certificate downloaded successfully.`,
+      });
+    } catch (error: any) {
+      console.error('PDF Generation Error:', error);
+      toaster.error({
+        title: 'Download Failed',
+        description: 'Unable to download report. Please try again.',
+      });
+    } finally {
+      setIsDownloading(false);
+    }
   };
+
+  // Show loading state
+  if (isLoading) {
+    return (
+      <DashboardLayout>
+        <Box minH="100vh" bg="#EDF5FE" display="flex" alignItems="center" justifyContent="center">
+          <VStack gap={4}>
+            <Spinner size="xl" color="#2E7BB4" />
+            <Text color="#666">Loading certificate...</Text>
+          </VStack>
+        </Box>
+      </DashboardLayout>
+    );
+  }
+
+  // Show error if certificate not found
+  if (!certificateData) {
+    return (
+      <DashboardLayout>
+        <Box minH="100vh" bg="#EDF5FE" px={6} py={5}>
+          <VStack gap={4} mt={10}>
+            <Text fontSize="20px" fontWeight="600" color="#666">
+              Certificate not found
+            </Text>
+            <ChakraButton
+              bg="#2E7BB4"
+              color="white"
+              onClick={() => router.push('/declaration/check-history')}
+            >
+              Back to Check History
+            </ChakraButton>
+          </VStack>
+        </Box>
+      </DashboardLayout>
+    );
+  }
+
+  const checkDetail = certificateData.checkDetail;
 
   return (
     <DashboardLayout>
@@ -92,6 +201,7 @@ const DeclarationCertificate = () => {
           maxW="600px"
           mx="auto"
           boxShadow={{ base: 'none', md: 'lg' }}
+          id="certificate-content"
         >
           <VStack gap={{ base: 7, md: 4 }} align="stretch">
             {/* Header with Logo and ID */}
@@ -101,7 +211,9 @@ const DeclarationCertificate = () => {
                   Infra<Text as="span" color="#47B65C">Credit</Text>
                 </Text>
               </Box>
-              <Text fontSize={{ base: '14px', md: '12px' }} color="#333">ID: {id || '1254KD'}</Text>
+              <Text fontSize={{ base: '14px', md: '12px' }} color="#333">
+                ID: {certificateData.serialNumber}
+              </Text>
             </HStack>
 
             {/* Title */}
@@ -111,12 +223,12 @@ const DeclarationCertificate = () => {
 
             {/* Counterparty Name */}
             <Heading fontSize={{ base: '19px', md: '18px' }} fontWeight="600" color="#2E7BB4" textAlign="center">
-              {counterparty.name}
+              {certificateData.counterparty}
             </Heading>
 
             {/* Conflict Status */}
             <Box textAlign="center">
-              {counterparty.hasConflict ? (
+              {checkDetail?.hasConflict ? (
                 <Box
                   bg="#FF6B47"
                   color="white"
@@ -148,10 +260,23 @@ const DeclarationCertificate = () => {
             {/* Checked By Info */}
             <VStack gap={0.5}>
               <Text fontSize={{ base: '17px', md: '13px' }} color="#333">
-                Checked by: <Text as="span" color="#333" fontWeight="500">Emmanuel Adeyemo</Text>
+                Checked by: <Text as="span" color="#333" fontWeight="500">
+                  {checkDetail?.checkedByFullName || 'N/A'}
+                </Text>
               </Text>
               <Text fontSize={{ base: '17px', md: '13px' }} color="#333">
-                Date/Time: <Text as="span" color="#333" fontWeight="500">7th July, 2025; 11:25pm</Text>
+                Date/Time: <Text as="span" color="#333" fontWeight="500">
+                  {checkDetail?.checkedAt
+                    ? new Date(checkDetail.checkedAt).toLocaleString('en-US', {
+                        day: 'numeric',
+                        month: 'long',
+                        year: 'numeric',
+                        hour: 'numeric',
+                        minute: '2-digit',
+                        hour12: true,
+                      })
+                    : 'N/A'}
+                </Text>
               </Text>
             </VStack>
 
@@ -167,11 +292,20 @@ const DeclarationCertificate = () => {
               _hover={{ bg: '#3DA550' }}
               _active={{ bg: '#2E8B3D' }}
               onClick={handleDownloadReport}
+              disabled={isDownloading}
+              opacity={isDownloading ? 0.6 : 1}
             >
-              <HStack gap={2} justify="center">
-                <LuDownload />
-                <Text>Download Report</Text>
-              </HStack>
+              {isDownloading ? (
+                <HStack gap={2} justify="center">
+                  <Spinner size="md" />
+                  <Text>Downloading...</Text>
+                </HStack>
+              ) : (
+                <HStack gap={2} justify="center">
+                  <LuDownload />
+                  <Text>Download Report</Text>
+                </HStack>
+              )}
             </ChakraButton>
 
             {/* Additional Info */}

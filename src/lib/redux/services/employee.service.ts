@@ -15,6 +15,7 @@ export interface IUser {
   email: string;
   role: number;
   status: number;
+  profileImageUrl?: string;
 }
 
 // Create user request
@@ -33,6 +34,7 @@ export interface IUpdateUserRequest {
   email?: string;
   departmentId?: string;
   role?: number;
+  profileImageUrl?: string;
 }
 
 export const employeeApi = createApi({
