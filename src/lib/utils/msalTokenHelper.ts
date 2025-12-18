@@ -19,7 +19,6 @@ export const acquireFreshToken = async (): Promise<string | null> => {
     if (cookieToken) {
       return cookieToken;
     }
-    console.warn('MSAL instance not initialized and no token in cookies');
     return null;
   }
 
@@ -29,7 +28,6 @@ export const acquireFreshToken = async (): Promise<string | null> => {
     if (cookieToken) {
       return cookieToken;
     }
-    console.warn('No active account found');
     return null;
   }
 
@@ -57,7 +55,6 @@ export const acquireFreshToken = async (): Promise<string | null> => {
       }
     } catch (cacheError) {
       // Refresh token extraction not critical - MSAL handles it internally
-      console.debug('Could not extract refresh token from MSAL cache');
     }
 
     return response.accessToken;

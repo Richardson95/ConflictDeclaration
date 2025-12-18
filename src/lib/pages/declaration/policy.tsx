@@ -127,8 +127,6 @@ const ConflictsPolicy = () => {
               cursor={!isAgreed ? 'not-allowed' : 'pointer'}
               onClick={() => {
                 if (isAgreed) {
-                  // TODO: Handle submission and navigate to next page
-                  console.log('Policy agreed and submitted');
                   router.push('/dashboard');
                 }
               }}

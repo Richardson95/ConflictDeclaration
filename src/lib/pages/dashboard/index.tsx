@@ -14,13 +14,10 @@ import {
 import { Button } from '@/components/ui';
 import { LuHistory, LuDownload } from 'react-icons/lu';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useGetCounterpartiesQuery, useCheckConflictMutation } from '@/lib/redux/services/counterparty.service';
-import { useGetUserDeclarationStatusQuery } from '@/lib/redux/services/dashboard.service';
 import type { ICounterparty, IConflictCheckResponse } from '@/lib/interfaces/counterparty.interfaces';
 
 const Dashboard = () => {
-  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -29,7 +26,6 @@ const Dashboard = () => {
   const [showStatement, setShowStatement] = useState(false);
   const [notificationSent, setNotificationSent] = useState(false);
   const [conflictCheckResult, setConflictCheckResult] = useState<IConflictCheckResponse | null>(null);
-  const [bannerDismissed, setBannerDismissed] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
 
   // Fetch counterparties from API
@@ -38,9 +34,6 @@ const Dashboard = () => {
     limit: itemsPerPage,
     filters: searchQuery ? { searchTerm: searchQuery } : undefined,
   });
-
-  // Fetch user declaration status
-  const { data: declarationStatusData } = useGetUserDeclarationStatusQuery();
 
   // Check conflict mutation
   const [checkConflict, { isLoading: isCheckingConflict }] = useCheckConflictMutation();
@@ -64,7 +57,6 @@ const Dashboard = () => {
 
   const handleNotifyCompliance = useCallback(() => {
     if (selectedCounterparty) {
-      console.log('Notifying compliance for:', selectedCounterparty.name);
       setNotificationSent(true);
     }
   }, [selectedCounterparty]);
@@ -91,7 +83,6 @@ const Dashboard = () => {
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
       const margin = 20;
-      const contentWidth = pageWidth - (2 * margin);
       let yPosition = margin;
 
       // Helper function to add text
@@ -186,13 +177,10 @@ const Dashboard = () => {
       pdf.save(filename);
 
       setIsDownloading(false);
-      console.log('PDF generated successfully');
     } catch (error) {
-      console.error('Detailed error generating PDF:', error);
-      console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
-      console.error('Error message:', error instanceof Error ? error.message : String(error));
+      console.error('Error generating PDF:', error);
       setIsDownloading(false);
-      alert(`Error generating report: ${error instanceof Error ? error.message : 'Unknown error'}. Check console for details.`);
+      alert(`Error generating report: ${error instanceof Error ? error.message : 'Unknown error'}.`);
     }
   }, [conflictCheckResult]);
 
@@ -241,70 +229,9 @@ const Dashboard = () => {
     return pages;
   }, [currentPage, totalPages]);
 
-  // Check if user needs to submit declaration
-  const showDeclarationReminder = !bannerDismissed &&
-    declarationStatusData?.data &&
-    !declarationStatusData.data.hasSubmittedThisYear;
-
   return (
     <DashboardLayout>
       <Box p={{ base: 4, md: 5, lg: 6 }} bg="#EDF5FE" minH="100vh">
-        {/* Declaration Reminder Banner */}
-        {showDeclarationReminder && (
-          <Box
-            bg="linear-gradient(135deg, #FFF3E0 0%, #FFE0B2 100%)"
-            borderRadius="12px"
-            p={{ base: 4, md: 5 }}
-            mb={6}
-            border="2px solid #FF9800"
-            position="relative"
-          >
-            <HStack align="flex-start" justify="space-between">
-              <VStack align="stretch" flex="1" gap={3}>
-                <HStack gap={2}>
-                  <Text fontSize={{ base: "20px", md: "24px" }}>⚠️</Text>
-                  <Heading fontSize={{ base: "16px", md: "18px" }} fontWeight="600" color="#E65100">
-                    Declaration Reminder
-                  </Heading>
-                </HStack>
-                <Text fontSize={{ base: "14px", md: "15px" }} color="#333" lineHeight="1.6">
-                  You haven&apos;t submitted your conflict of interest declaration for {new Date().getFullYear()} yet.
-                  Please complete your declaration to ensure compliance.
-                </Text>
-                <HStack gap={3} flexWrap="wrap">
-                  <ChakraButton
-                    bg="#FF9800"
-                    color="white"
-                    fontSize="14px"
-                    fontWeight="500"
-                    px={6}
-                    h="40px"
-                    borderRadius="8px"
-                    _hover={{ bg: '#F57C00' }}
-                    onClick={() => router.push('/declaration')}
-                  >
-                    Submit Declaration Now
-                  </ChakraButton>
-                  <ChakraButton
-                    bg="transparent"
-                    color="#666"
-                    fontSize="14px"
-                    fontWeight="500"
-                    px={4}
-                    h="40px"
-                    borderRadius="8px"
-                    border="1px solid #D0D0D0"
-                    _hover={{ bg: 'rgba(0,0,0,0.05)' }}
-                    onClick={() => setBannerDismissed(true)}
-                  >
-                    Dismiss
-                  </ChakraButton>
-                </HStack>
-              </VStack>
-            </HStack>
-          </Box>
-        )}
-
         {/* Header */}
         <HStack justify="space-between" align="center" mb={6} flexWrap="wrap" gap={4} display={{ base: "none", lg: "flex" }}>
           <Heading fontSize="24px" fontWeight="600" color="#2C3E50">

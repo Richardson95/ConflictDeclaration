@@ -10,49 +10,84 @@ import { Box, Heading, VStack, Text, Image } from '@chakra-ui/react';
 import { setCredentials } from '@/lib/redux/slices/authSlice';
 import { useAppDispatch } from '@/lib/redux/store';
 import { useRouter } from 'next/navigation';
+import { useLazyGetCurrentUserQuery } from '@/lib/redux/services/auth.service';
 
 const Login = () => {
   const router = useRouter();
   const dispatch = useAppDispatch();
   const { instance } = useMsal();
   const [isLoading, setIsLoading] = useState(false);
+  const [getCurrentUser] = useLazyGetCurrentUserQuery();
 
-  const handleSingleSignIn = () => {
+  const handleSingleSignIn = async () => {
     setIsLoading(true);
-    instance
-      .loginPopup(loginRequest)
-      .then((res) => {
-        const { accessToken, account } = res;
-        const email = account?.username;
-        const data = { email };
-        const payload = { data, token: accessToken };
 
-        // Store token with longer expiration (7 days)
-        // MSAL will automatically refresh it before expiration
-        Cookies.set('token', accessToken, { expires: 7 });
+    try {
+      // Step 1: Authenticate with Azure AD
+      const res = await instance.loginPopup(loginRequest);
+      const { accessToken, account } = res;
+      const email = account?.username;
 
-        // Set the active account for MSAL to use for silent token acquisition
-        instance.setActiveAccount(account);
+      // Temporarily set active account for the API call
+      instance.setActiveAccount(account);
 
-        dispatch(setCredentials(payload));
-        toaster.success({
-          title: 'Login successful',
-          description: 'You have been logged in successfully.',
-          closable: true,
-        });
-        router.push('/dashboard');
-      })
-      .catch(() => {
+      // Step 2: Check if user is profiled in the system BEFORE storing token
+      // We need to temporarily store the token to make the API call
+      Cookies.set('token', accessToken, { expires: 7 });
+
+      try {
+        const userResponse = await getCurrentUser().unwrap();
+
+        if (userResponse.success && userResponse.data) {
+          // User is profiled, proceed with login
+          const data = { email };
+          const payload = { data, token: accessToken };
+
+          dispatch(setCredentials(payload));
+          toaster.success({
+            title: 'Login successful',
+            description: 'You have been logged in successfully.',
+            closable: true,
+          });
+          router.push('/dashboard');
+        } else {
+          // User profile check returned unsuccessful - remove token immediately
+          Cookies.remove('token');
+          instance.setActiveAccount(null);
+
+          // Also clear any MSAL cache
+          await instance.clearCache();
+
+          toaster.error({
+            title: 'Access Denied',
+            description: 'User not profiled. Please contact administrator to set up your profile.',
+            closable: true,
+          });
+        }
+      } catch (profileError: any) {
+        // User is not profiled in the system - remove token immediately
+        Cookies.remove('token');
+        instance.setActiveAccount(null);
+
+        // Also clear any MSAL cache
+        await instance.clearCache();
+
         toaster.error({
-          title: 'Login failed',
-          description: 'Login failed, please try again.',
+          title: 'Access Denied',
+          description: 'User not profiled. Please contact administrator to set up your profile.',
           closable: true,
         });
-        setIsLoading(false);
-      })
-      .finally(() => {
-        setIsLoading(false);
+      }
+    } catch (error) {
+      // Azure AD authentication failed
+      toaster.error({
+        title: 'Login failed',
+        description: 'Login failed, please try again.',
+        closable: true,
       });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

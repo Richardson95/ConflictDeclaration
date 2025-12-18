@@ -22,18 +22,13 @@ export const decodeJwt = (token: string): any => {
 export const getUserIdFromToken = (): string | null => {
   const token = Cookies.get('token');
   if (!token) {
-    console.log('No token found in cookies');
     return null;
   }
 
   const decoded = decodeJwt(token);
   if (!decoded) {
-    console.log('Failed to decode token');
     return null;
   }
-
-  // Log all claims to see what's available
-  console.log('JWT Token Claims:', decoded);
 
   // Try different possible claim names for userId
   // Common claims: sub, userId, nameid, uid, user_id, oid (object id)
@@ -47,8 +42,6 @@ export const getUserIdFromToken = (): string | null => {
     decoded['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'] ||
     decoded['http://schemas.microsoft.com/identity/claims/objectidentifier'] ||
     null;
-
-  console.log('Extracted userId:', userId);
 
   return userId;
 };

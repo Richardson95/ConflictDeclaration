@@ -37,9 +37,7 @@ export const tokenRefreshMiddleware: Middleware = (_api: MiddlewareAPI) => (next
     const refreshToken = Cookies.get('refreshToken');
 
     if (!refreshToken) {
-      // No refresh token available, log warning but don't redirect here
-      // Let the authErrorMiddleware handle the redirect
-      console.warn('No refresh token available for silent refresh');
+      // No refresh token available, let the authErrorMiddleware handle the redirect
       return result;
     }
 
@@ -66,7 +64,6 @@ export const tokenRefreshMiddleware: Middleware = (_api: MiddlewareAPI) => (next
             // Store new tokens
             Cookies.set('token', data.data.accessToken, { expires: 7 });
             Cookies.set('refreshToken', data.data.refreshToken, { expires: 7 });
-            console.log('Token refreshed successfully');
             processQueue();
           } else {
             throw new Error('Invalid refresh token response');

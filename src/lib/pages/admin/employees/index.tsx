@@ -110,11 +110,13 @@ const EmployeesPage = () => {
 
   // Filter options
   const statusOptions = [
+    { label: 'All Status', value: '' },
     { label: 'Completed', value: 'Completed' },
     { label: 'Pending', value: 'Pending' },
   ];
 
   const departmentOptions = [
+    { label: 'All Departments', value: '' },
     ...Array.from(new Set(employees.map((item: any) => item.department))).map(
       (dept) => ({
         label: dept,
@@ -150,7 +152,7 @@ const EmployeesPage = () => {
   const filteredData = useMemo(() => {
     return employees.filter((item: any) => {
       const matchesSearch = item.fullName.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesStatus = !selectedStatus || item.statusOfDeclarationOfDeclaration === selectedStatus;
+      const matchesStatus = !selectedStatus || item.statusOfDeclaration === selectedStatus;
       const matchesDepartment = !selectedDepartment || item.department === selectedDepartment;
 
       return matchesSearch && matchesStatus && matchesDepartment;
@@ -414,7 +416,7 @@ const EmployeesPage = () => {
                   borderRadius="6px"
                   height="40px"
                 >
-                  <ChakraSelect.ValueText placeholder="Status" />
+                  <ChakraSelect.ValueText placeholder="All Status" />
                   <ChakraSelect.Indicator />
                 </ChakraSelect.Trigger>
                 <ChakraSelect.Content
@@ -448,7 +450,7 @@ const EmployeesPage = () => {
                   borderRadius="6px"
                   height="40px"
                 >
-                  <ChakraSelect.ValueText placeholder="Department" />
+                  <ChakraSelect.ValueText placeholder="All Departments" />
                   <ChakraSelect.Indicator />
                 </ChakraSelect.Trigger>
                 <ChakraSelect.Content
