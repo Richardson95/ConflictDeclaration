@@ -56,6 +56,17 @@ const CounterpartiesPage = () => {
     }
   }, [selectedCounterparty]);
 
+  // Clear all filters
+  const handleClearFilters = () => {
+    setSearchQuery('');
+    setSelectedSector('');
+    setSelectedConflict('');
+    setCurrentPage(1);
+  };
+
+  // Check if any filters are active
+  const hasActiveFilters = searchQuery || selectedSector || selectedConflict;
+
   const handleDownloadReport = async (format: 'csv' | 'excel') => {
     try {
       const blob = await downloadReport({ format }).unwrap();
@@ -325,6 +336,24 @@ const CounterpartiesPage = () => {
                 height="40px"
               />
             </Box>
+
+            {/* Clear Filters Button */}
+            {hasActiveFilters && (
+              <ChakraButton
+                bg="white"
+                color="#666"
+                fontSize="13px"
+                fontWeight="500"
+                px={4}
+                h="40px"
+                borderRadius="6px"
+                border="1px solid #D1D5DB"
+                _hover={{ bg: '#F9FAFB', borderColor: '#9CA3AF' }}
+                onClick={handleClearFilters}
+              >
+                Clear Filters
+              </ChakraButton>
+            )}
           </HStack>
 
           {/* Table */}

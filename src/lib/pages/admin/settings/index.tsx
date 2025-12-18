@@ -192,6 +192,19 @@ const SettingsPage = () => {
     }
   }, [selectedSector, searchQuery, activeTab]);
 
+  // Clear all filters
+  const handleClearFilters = () => {
+    setSearchQuery('');
+    setSelectedDepartment('');
+    setSelectedRole('');
+    setSelectedStatus('');
+    setSelectedSector('');
+    setCurrentPage(1);
+  };
+
+  // Check if any filters are active
+  const hasActiveFilters = searchQuery || selectedDepartment || selectedStatus || selectedSector;
+
   const tabs = ['Employees', 'Departments', 'Counterparties', 'Sectors', 'Activity log'];
 
   // Get current tab data
@@ -252,13 +265,13 @@ const SettingsPage = () => {
         const matchesSearch = searchQuery === '' || fullName.includes(searchQuery.toLowerCase()) || item.email.toLowerCase().includes(searchQuery.toLowerCase());
         const matchesDepartment = !selectedDepartment || item.department?.name === selectedDepartment;
 
-        // Debug status filtering
+        // Status filtering - Backend uses: 1=Active, 2=Inactive
         let matchesStatus = true;
         if (selectedStatus) {
           if (selectedStatus === 'active') {
             matchesStatus = item.status === 1;
           } else if (selectedStatus === 'inactive') {
-            matchesStatus = item.status === 0;
+            matchesStatus = item.status === 2; // Backend uses 2 for inactive, not 0
           }
         }
 
@@ -788,6 +801,24 @@ const SettingsPage = () => {
                   </ChakraSelect.Positioner>
                 </ChakraSelect.Root>
               )}
+
+              {/* Clear Filters Button */}
+              {hasActiveFilters && (
+                <ChakraButton
+                  bg="white"
+                  color="#666"
+                  fontSize="13px"
+                  fontWeight="500"
+                  px={4}
+                  h="40px"
+                  borderRadius="6px"
+                  border="1px solid #D1D5DB"
+                  _hover={{ bg: '#F9FAFB', borderColor: '#9CA3AF' }}
+                  onClick={handleClearFilters}
+                >
+                  Clear Filters
+                </ChakraButton>
+              )}
             </HStack>
 
             {/* Add Button */}
@@ -824,9 +855,16 @@ const SettingsPage = () => {
                 <Text color="#666">Loading...</Text>
               </Box>
             ) : paginatedData.length === 0 ? (
-              <Box textAlign="center" py={8}>
-                <Text color="#666">No {activeTab.toLowerCase()} found</Text>
-              </Box>
+              <VStack py={12} gap={3}>
+                <Text fontSize="16px" fontWeight="600" color="#333">
+                  No {activeTab} Found
+                </Text>
+                <Text fontSize="14px" color="#666" textAlign="center" maxW="500px">
+                  {hasActiveFilters
+                    ? `No ${activeTab.toLowerCase()} match your current filters. Try adjusting your search criteria or click "Clear Filters" to see all ${activeTab.toLowerCase()}.`
+                    : `No ${activeTab.toLowerCase()} available. ${activeTab !== 'Activity log' ? `Click "Add ${activeTab === 'Employees' ? 'User' : activeTab === 'Counterparties' ? 'Counterparty' : activeTab.slice(0, -1)}" to create one.` : ''}`}
+                </Text>
+              </VStack>
             ) : (
               <>
                 {/* Table Header */}
@@ -978,7 +1016,7 @@ const SettingsPage = () => {
                                 fontSize="12px"
                                 fontWeight="500"
                               >
-                                {item.status === 1 ? 'Active' : 'Inactive'}
+                                {item.status === 1 ? 'Active' : item.status === 2 ? 'Inactive' : 'Unknown'}
                               </Box>
                             </Box>
                             <Box w="180px" textAlign="center">
@@ -1187,7 +1225,7 @@ const SettingsPage = () => {
                                 fontSize="12px"
                                 fontWeight="500"
                               >
-                                {item.status === 1 ? 'Active' : 'Inactive'}
+                                {item.status === 1 ? 'Active' : item.status === 2 ? 'Inactive' : 'Unknown'}
                               </Box>
                             </HStack>
                             <HStack gap={2} mt={2}>

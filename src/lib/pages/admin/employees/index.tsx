@@ -50,6 +50,23 @@ const EmployeesPage = () => {
   const [selectedYear, setSelectedYear] = useState<number>(currentYear);
   const yearOptions = [currentYear - 2, currentYear - 1, currentYear];
 
+  // Reset to page 1 when year changes
+  const handleYearChange = (year: number) => {
+    setSelectedYear(year);
+    setCurrentPage(1);
+  };
+
+  // Clear all filters
+  const handleClearFilters = () => {
+    setSearchQuery('');
+    setSelectedStatus('');
+    setSelectedDepartment('');
+    setCurrentPage(1);
+  };
+
+  // Check if any filters are active
+  const hasActiveFilters = searchQuery || selectedStatus || selectedDepartment;
+
   // Notify user mutation
   const [notifyUser, { isLoading: isNotifying }] = useNotifyUserMutation();
 
@@ -60,6 +77,7 @@ const EmployeesPage = () => {
   const { data: usersData, isLoading: isLoadingUsers } = useGetAllUsersDeclarationStatusQuery({
     page: currentPage,
     limit: itemsPerPage,
+    year: selectedYear,
   });
 
   const employees = usersData?.data?.result || [];
@@ -370,7 +388,7 @@ const EmployeesPage = () => {
                       bg={selectedYear === year ? 'gray.100' : 'white'}
                       _hover={{ bg: 'gray.50' }}
                       cursor="pointer"
-                      onClick={() => setSelectedYear(year)}
+                      onClick={() => handleYearChange(year)}
                       borderRadius="4px"
                     >
                       {year}
@@ -484,56 +502,100 @@ const EmployeesPage = () => {
                 height="40px"
               />
             </Box>
+
+            {/* Clear Filters Button */}
+            {hasActiveFilters && (
+              <ChakraButton
+                bg="white"
+                color="#666"
+                fontSize="13px"
+                fontWeight="500"
+                px={4}
+                h="40px"
+                borderRadius="6px"
+                border="1px solid #D1D5DB"
+                _hover={{ bg: '#F9FAFB', borderColor: '#9CA3AF' }}
+                onClick={handleClearFilters}
+              >
+                Clear Filters
+              </ChakraButton>
+            )}
           </HStack>
 
           {/* Table */}
           <Box overflowX="auto">
+            {/* Loading State */}
+            {isLoadingUsers && (
+              <Box py={12} textAlign="center">
+                <Text fontSize="14px" color="#666">
+                  Loading employee data...
+                </Text>
+              </Box>
+            )}
+
+            {/* Empty State */}
+            {!isLoadingUsers && paginatedData.length === 0 && (
+              <VStack py={12} gap={3}>
+                <Text fontSize="16px" fontWeight="600" color="#333">
+                  No Records Found
+                </Text>
+                <Text fontSize="14px" color="#666" textAlign="center" maxW="400px">
+                  {searchQuery || selectedStatus || selectedDepartment
+                    ? 'No employees match your current filters. Try adjusting your search criteria.'
+                    : `No declaration records found for ${selectedYear}. Employees may not have submitted declarations for this year yet.`}
+                </Text>
+              </VStack>
+            )}
+
             {/* Table Header */}
-            <Box
-              bg="#E2EEFE"
-              borderRadius="8px"
-              px={4}
-              py={3}
-              mb={2}
-              display={{ base: 'none', md: 'block' }}
-            >
-              <HStack>
-                <Box w="60px">
-                  <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
-                    S/N
-                  </Text>
-                </Box>
-                <Box flex="1">
-                  <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
-                    Full Name
-                  </Text>
-                </Box>
-                <Box flex="1">
-                  <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
-                    Department
-                  </Text>
-                </Box>
-                <Box w="150px" textAlign="center">
-                  <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
-                    Status
-                  </Text>
-                </Box>
-                <Box w="180px" textAlign="center">
-                  <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
-                    Completed Date
-                  </Text>
-                </Box>
-                <Box w="100px" textAlign="center">
-                  <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
-                    Actions
-                  </Text>
-                </Box>
-              </HStack>
-            </Box>
+            {!isLoadingUsers && paginatedData.length > 0 && (
+              <Box
+                bg="#E2EEFE"
+                borderRadius="8px"
+                px={4}
+                py={3}
+                mb={2}
+                display={{ base: 'none', md: 'block' }}
+              >
+                <HStack>
+                  <Box w="60px">
+                    <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
+                      S/N
+                    </Text>
+                  </Box>
+                  <Box flex="1">
+                    <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
+                      Full Name
+                    </Text>
+                  </Box>
+                  <Box flex="1">
+                    <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
+                      Department
+                    </Text>
+                  </Box>
+                  <Box w="150px" textAlign="center">
+                    <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
+                      Status
+                    </Text>
+                  </Box>
+                  <Box w="180px" textAlign="center">
+                    <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
+                      Completed Date
+                    </Text>
+                  </Box>
+                  <Box w="100px" textAlign="center">
+                    <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
+                      Actions
+                    </Text>
+                  </Box>
+                </HStack>
+              </Box>
+            )}
 
             {/* Table Body - Desktop */}
-            <VStack gap={2} display={{ base: 'none', md: 'flex' }}>
-              {paginatedData.map((item, index) => (
+            {!isLoadingUsers && paginatedData.length > 0 && (
+              <VStack gap={2} display={{ base: 'none', md: 'flex' }}>
+                {paginatedData.map((item, index) => (
                 <Box
                   key={item.id}
                   bg={index % 2 === 0 ? 'white' : '#F9FAFB'}
@@ -610,11 +672,13 @@ const EmployeesPage = () => {
                   </HStack>
                 </Box>
               ))}
-            </VStack>
+              </VStack>
+            )}
 
             {/* Table Body - Mobile Cards */}
-            <VStack gap={3} display={{ base: 'flex', md: 'none' }}>
-              {paginatedData.map((item, index) => (
+            {!isLoadingUsers && paginatedData.length > 0 && (
+              <VStack gap={3} display={{ base: 'flex', md: 'none' }}>
+                {paginatedData.map((item, index) => (
                 <Box
                   key={item.id}
                   bg="white"
@@ -706,11 +770,13 @@ const EmployeesPage = () => {
                   </VStack>
                 </Box>
               ))}
-            </VStack>
+              </VStack>
+            )}
           </Box>
 
           {/* Pagination */}
-          <HStack justify="space-between" mt={6} flexWrap="wrap" gap={4}>
+          {!isLoadingUsers && paginatedData.length > 0 && (
+            <HStack justify="space-between" mt={6} flexWrap="wrap" gap={4}>
             {/* Items per page */}
             <HStack gap={2}>
               <Text fontSize="13px" color="#666">
@@ -822,7 +888,8 @@ const EmployeesPage = () => {
                 <Text fontSize="18px">&gt;</Text>
               </Box>
             </HStack>
-          </HStack>
+            </HStack>
+          )}
         </Box>
       </Box>
     </AdminLayout>
