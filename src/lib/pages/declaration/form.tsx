@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Box,
   Heading,
@@ -13,15 +13,15 @@ import {
   createListCollection,
   Portal,
   Checkbox,
+  Input,
 } from '@chakra-ui/react';
 import { useRouter } from 'next/navigation';
 import DashboardLayout from '@/lib/layout/DashboardLayout';
 import leftArrow from '@/assets/icons/left-arrow-1.png';
 import { Button, toaster } from '@/components/ui';
 import { useGetCounterpartiesQuery } from '@/lib/redux/services/counterparty.service';
-import { useSubmitDeclarationMutation } from '@/lib/redux/services/declaration.service';
+import { useSubmitDeclarationMutation, useNotifyComplianceMutation } from '@/lib/redux/services/declaration.service';
 import { useGetCurrentUserQuery } from '@/lib/redux/services/auth.service';
-import { useGetUserDeclarationStatusQuery } from '@/lib/redux/services/dashboard.service';
 import { useAppDispatch } from '@/lib/redux/store';
 import { dashboardApi } from '@/lib/redux/services/dashboard.service';
 import type { ICounterparty } from '@/lib/interfaces/counterparty.interfaces';
@@ -37,6 +37,9 @@ const DeclarationForm = () => {
   const [showPolicyViewModal, setShowPolicyViewModal] = useState(false);
   const [isAgreed, setIsAgreed] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showConflictModal, setShowConflictModal] = useState(false);
+  const [submittedDeclaration, setSubmittedDeclaration] = useState<any>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Get current user from /Users/me endpoint
   const { data: currentUserData } = useGetCurrentUserQuery();
@@ -51,10 +54,34 @@ const DeclarationForm = () => {
   // Submit declaration mutation
   const [submitDeclaration, { isLoading: isSubmitting }] = useSubmitDeclarationMutation();
 
+  // Notify compliance mutation
+  const [notifyCompliance, { isLoading: isNotifying }] = useNotifyComplianceMutation();
+
   // Get counterparties list
   const counterparties: ICounterparty[] = useMemo(() => {
     return counterpartiesData?.data || [];
   }, [counterpartiesData]);
+
+  // Filter counterparties based on search query
+  const filteredCounterparties: ICounterparty[] = useMemo(() => {
+    if (!searchQuery.trim()) {
+      return counterparties;
+    }
+    return counterparties.filter((counterparty) =>
+      counterparty.name.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [counterparties, searchQuery]);
+
+  // Initialize all answers to "no" by default when counterparties are loaded
+  useEffect(() => {
+    if (counterparties.length > 0 && Object.keys(answers).length === 0) {
+      const defaultAnswers: Record<string, string> = {};
+      counterparties.forEach((counterparty) => {
+        defaultAnswers[counterparty.id] = 'no';
+      });
+      setAnswers(defaultAnswers);
+    }
+  }, [counterparties, answers]);
 
   const yearOptions = [
     { label: currentYear.toString(), value: currentYear.toString() },
@@ -73,6 +100,28 @@ const DeclarationForm = () => {
       ...prev,
       [counterpartyId]: value,
     }));
+  };
+
+  const handleNotifyCompliance = async () => {
+    if (!submittedDeclaration?.id) return;
+
+    try {
+      const result = await notifyCompliance({ declarationId: submittedDeclaration.id }).unwrap();
+
+      toaster.success({
+        title: 'Compliance Notified',
+        description: result.message || 'The compliance department has been notified successfully',
+      });
+
+      setShowConflictModal(false);
+      router.push('/dashboard');
+    } catch (error: any) {
+      console.error('Error notifying compliance:', error);
+      toaster.error({
+        title: 'Notification Failed',
+        description: error?.data?.message || 'Failed to notify compliance department. Please try again.',
+      });
+    }
   };
 
   const handleSubmitDeclaration = async () => {
@@ -106,7 +155,18 @@ const DeclarationForm = () => {
       });
 
       setShowPolicyModal(false);
-      setShowSuccessModal(true);
+
+      // Check if there's a conflict
+      const declarationData = result.data;
+      setSubmittedDeclaration(declarationData);
+
+      if (declarationData?.conflictCount > 0) {
+        // Show conflict modal if there's a conflict
+        setShowConflictModal(true);
+      } else {
+        // Show success modal if no conflict
+        setShowSuccessModal(true);
+      }
     } catch (error: any) {
       console.error('Error submitting declaration:', error);
       toaster.error({
@@ -170,7 +230,61 @@ const DeclarationForm = () => {
               or reach out to the compliance team for any clarification needed.
             </Text>
           </Box>
-          <Box display="flex" justifyContent={{ base: 'flex-start', md: 'flex-end' }} mt={{ base: 3, md: -12 }}>
+          <Box
+            display="flex"
+            flexDirection={{ base: 'column', md: 'row' }}
+            gap={{ base: 3, md: 3 }}
+            justifyContent={{ base: 'flex-start', md: 'flex-end' }}
+            alignItems={{ base: 'stretch', md: 'center' }}
+            mt={{ base: 3, md: -12 }}
+          >
+            {/* Search Input */}
+            <Box position="relative" flex={{ base: '1', md: 'none' }} width={{ base: '100%', md: '280px' }}>
+              <Input
+                type="text"
+                placeholder="Search counterparties..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                w="100%"
+                h="36px"
+                px={4}
+                pr={10}
+                fontSize="13px"
+                color="#333"
+                bg="white"
+                border="1px solid #E0E0E0"
+                borderRadius="6px"
+                outline="none"
+                _focus={{
+                  borderColor: '#2E7BB4',
+                  boxShadow: '0 0 0 1px #2E7BB4',
+                }}
+                _placeholder={{ color: '#999' }}
+              />
+              <Box
+                position="absolute"
+                right="12px"
+                top="50%"
+                transform="translateY(-50%)"
+                pointerEvents="none"
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#999"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <circle cx="11" cy="11" r="8" />
+                  <path d="m21 21-4.35-4.35" />
+                </svg>
+              </Box>
+            </Box>
+
+            {/* Year Select */}
             <Select.Root
               collection={yearCollection}
               value={[selectedYear]}
@@ -236,13 +350,17 @@ const DeclarationForm = () => {
             <Box textAlign="center" py={8}>
               <Text color="#666">No counterparties found.</Text>
             </Box>
+          ) : filteredCounterparties.length === 0 ? (
+            <Box textAlign="center" py={8}>
+              <Text color="#666">No counterparties match your search.</Text>
+            </Box>
           ) : (
             <VStack gap={{ base: 7, md: 3, lg: 4 }} align="stretch">
-              {counterparties.map((counterparty, index) => (
+              {filteredCounterparties.map((counterparty, index) => (
                 <Box
                   key={counterparty.id}
                   py={{ base: 6, md: 3 }}
-                  borderBottom={index < counterparties.length - 1 ? '1px solid #E8E8E8' : 'none'}
+                  borderBottom={index < filteredCounterparties.length - 1 ? '1px solid #E8E8E8' : 'none'}
                 >
                   <VStack gap={{ base: 2, md: 2 }} align="stretch" display={{ base: 'flex', md: 'none' }}>
                     <Text fontSize={{ base: "17px", md: "13px" }} color="#333" fontWeight="500" lineHeight="1.4">
@@ -585,6 +703,107 @@ const DeclarationForm = () => {
             >
               Continue
             </Button>
+          </Box>
+        </Box>
+      )}
+
+      {/* Conflict Modal */}
+      {showConflictModal && submittedDeclaration && (
+        <Box
+          position="fixed"
+          top="0"
+          left="0"
+          right="0"
+          bottom="0"
+          bg="rgba(0, 0, 0, 0.5)"
+          display="flex"
+          alignItems="center"
+          justifyContent="center"
+          zIndex="9999"
+          px={{ base: 4, md: 0 }}
+        >
+          <Box
+            bg="white"
+            borderRadius={{ base: '10px', md: '12px' }}
+            maxW="520px"
+            w={{ base: '100%', md: '90%' }}
+            p={{ base: 5, md: 6 }}
+            boxShadow="2xl"
+          >
+            {/* Header */}
+            <Box mb={5} textAlign="center">
+              <Text fontSize={{ base: '11px', md: '12px' }} fontWeight="500" color="#666" mb={1}>
+                ID: {submittedDeclaration.id.substring(0, 8).toUpperCase()}
+              </Text>
+              <Heading fontSize={{ base: '17px', md: '19px' }} fontWeight="600" color="#2C3E50" mb={4}>
+                Conflict of Interest Statement
+              </Heading>
+            </Box>
+
+            {/* Conflict Badge */}
+            <Box
+              bg="#FF6B6B"
+              color="white"
+              fontSize={{ base: '13px', md: '14px' }}
+              fontWeight="600"
+              py={3}
+              px={4}
+              borderRadius="8px"
+              textAlign="center"
+              mb={5}
+            >
+              A Conflict of Interest exists.
+            </Box>
+
+            {/* Details */}
+            <VStack gap={2} align="stretch" mb={5}>
+              <HStack justify="space-between">
+                <Text fontSize={{ base: '12px', md: '13px' }} color="#666">
+                  Checked by:
+                </Text>
+                <Text fontSize={{ base: '12px', md: '13px' }} fontWeight="500" color="#333">
+                  {submittedDeclaration.userName || `${currentUserData?.data?.firstName || ''} ${currentUserData?.data?.lastName || ''}`.trim() || 'User'}
+                </Text>
+              </HStack>
+              <HStack justify="space-between">
+                <Text fontSize={{ base: '12px', md: '13px' }} color="#666">
+                  Date/Time:
+                </Text>
+                <Text fontSize={{ base: '12px', md: '13px' }} fontWeight="500" color="#333">
+                  {new Date(submittedDeclaration.submittedAt).toLocaleString('en-US', {
+                    month: 'long',
+                    day: 'numeric',
+                    year: 'numeric',
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    hour12: true,
+                  })}
+                </Text>
+              </HStack>
+            </VStack>
+
+            {/* Notify Button */}
+            <Button
+              bg="#2E7BB4"
+              color="white"
+              fontSize="14px"
+              fontWeight="500"
+              w="100%"
+              h="44px"
+              borderRadius="6px"
+              _hover={{ bg: '#256699' }}
+              onClick={handleNotifyCompliance}
+              loading={isNotifying}
+              disabled={isNotifying}
+              mb={3}
+            >
+              {isNotifying ? 'Notifying...' : 'Notify Compliance Department'}
+            </Button>
+
+            {/* Note */}
+            <Text fontSize={{ base: '11px', md: '12px' }} color="#FF6B6B" textAlign="center" lineHeight="1.6">
+              Note: You must notify the compliance department before downloading the certificate.
+            </Text>
           </Box>
         </Box>
       )}
