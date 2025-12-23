@@ -192,6 +192,19 @@ const SettingsPage = () => {
     }
   }, [selectedSector, searchQuery, activeTab]);
 
+  // Clear all filters
+  const handleClearFilters = () => {
+    setSearchQuery('');
+    setSelectedDepartment('');
+    setSelectedRole('');
+    setSelectedStatus('');
+    setSelectedSector('');
+    setCurrentPage(1);
+  };
+
+  // Check if any filters are active
+  const hasActiveFilters = searchQuery || selectedDepartment || selectedStatus || selectedSector;
+
   const tabs = ['Employees', 'Departments', 'Counterparties', 'Sectors', 'Activity log'];
 
   // Get current tab data
@@ -252,13 +265,13 @@ const SettingsPage = () => {
         const matchesSearch = searchQuery === '' || fullName.includes(searchQuery.toLowerCase()) || item.email.toLowerCase().includes(searchQuery.toLowerCase());
         const matchesDepartment = !selectedDepartment || item.department?.name === selectedDepartment;
 
-        // Debug status filtering
+        // Status filtering - Backend uses: 1=Active, 2=Inactive
         let matchesStatus = true;
         if (selectedStatus) {
           if (selectedStatus === 'active') {
             matchesStatus = item.status === 1;
           } else if (selectedStatus === 'inactive') {
-            matchesStatus = item.status === 0;
+            matchesStatus = item.status === 2; // Backend uses 2 for inactive, not 0
           }
         }
 
@@ -711,6 +724,8 @@ const SettingsPage = () => {
                         boxShadow="lg"
                         zIndex={1500}
                         position="absolute"
+                        maxH="250px"
+                        overflowY="auto"
                       >
                         {departmentOptions.map((option: any) => (
                           <ChakraSelect.Item key={option.value} item={option}>
@@ -778,6 +793,8 @@ const SettingsPage = () => {
                       boxShadow="lg"
                       zIndex={1500}
                       position="absolute"
+                      maxHeight="250px"
+                      overflowY="auto"
                     >
                       {sectorOptions.map((option: any) => (
                         <ChakraSelect.Item key={option.value} item={option}>
@@ -787,6 +804,24 @@ const SettingsPage = () => {
                     </ChakraSelect.Content>
                   </ChakraSelect.Positioner>
                 </ChakraSelect.Root>
+              )}
+
+              {/* Clear Filters Button */}
+              {hasActiveFilters && (
+                <ChakraButton
+                  bg="white"
+                  color="#666"
+                  fontSize="13px"
+                  fontWeight="500"
+                  px={4}
+                  h="40px"
+                  borderRadius="6px"
+                  border="1px solid #D1D5DB"
+                  _hover={{ bg: '#F9FAFB', borderColor: '#9CA3AF' }}
+                  onClick={handleClearFilters}
+                >
+                  Clear Filters
+                </ChakraButton>
               )}
             </HStack>
 
@@ -824,9 +859,16 @@ const SettingsPage = () => {
                 <Text color="#666">Loading...</Text>
               </Box>
             ) : paginatedData.length === 0 ? (
-              <Box textAlign="center" py={8}>
-                <Text color="#666">No {activeTab.toLowerCase()} found</Text>
-              </Box>
+              <VStack py={12} gap={3}>
+                <Text fontSize="16px" fontWeight="600" color="#333">
+                  No {activeTab} Found
+                </Text>
+                <Text fontSize="14px" color="#666" textAlign="center" maxW="500px">
+                  {hasActiveFilters
+                    ? `No ${activeTab.toLowerCase()} match your current filters. Try adjusting your search criteria or click "Clear Filters" to see all ${activeTab.toLowerCase()}.`
+                    : `No ${activeTab.toLowerCase()} available. ${activeTab !== 'Activity log' ? `Click "Add ${activeTab === 'Employees' ? 'User' : activeTab === 'Counterparties' ? 'Counterparty' : activeTab.slice(0, -1)}" to create one.` : ''}`}
+                </Text>
+              </VStack>
             ) : (
               <>
                 {/* Table Header */}
@@ -852,6 +894,11 @@ const SettingsPage = () => {
                         <Box flex="1">
                           <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
                             Department
+                          </Text>
+                        </Box>
+                        <Box w="120px" textAlign="center">
+                          <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
+                            Role
                           </Text>
                         </Box>
                         <Box w="100px" textAlign="center">
@@ -967,6 +1014,11 @@ const SettingsPage = () => {
                                 {item.department?.name || 'N/A'}
                               </Text>
                             </Box>
+                            <Box w="120px" textAlign="center">
+                              <Text fontSize="13px" color="#333">
+                                {item.role === 1 ? 'Employee' : item.role === 3 ? 'Admin' : item.role === 4 ? 'IT Admin' : item.role === 5 ? 'Operations' : item.role === 6 ? 'Compliance' : 'Unknown'}
+                              </Text>
+                            </Box>
                             <Box w="100px" textAlign="center">
                               <Box
                                 as="span"
@@ -978,7 +1030,7 @@ const SettingsPage = () => {
                                 fontSize="12px"
                                 fontWeight="500"
                               >
-                                {item.status === 1 ? 'Active' : 'Inactive'}
+                                {item.status === 1 ? 'Active' : item.status === 2 ? 'Inactive' : 'Unknown'}
                               </Box>
                             </Box>
                             <Box w="180px" textAlign="center">
@@ -1176,6 +1228,9 @@ const SettingsPage = () => {
                             <Text fontSize="13px" color="#666">
                               Dept: {item.department?.name || 'N/A'}
                             </Text>
+                            <Text fontSize="13px" color="#666">
+                              Role: {item.role === 1 ? 'Employee' : item.role === 3 ? 'Admin' : item.role === 4 ? 'IT Admin' : item.role === 5 ? 'Operations' : item.role === 6 ? 'Compliance' : 'Unknown'}
+                            </Text>
                             <HStack gap={2}>
                               <Box
                                 as="span"
@@ -1187,7 +1242,7 @@ const SettingsPage = () => {
                                 fontSize="12px"
                                 fontWeight="500"
                               >
-                                {item.status === 1 ? 'Active' : 'Inactive'}
+                                {item.status === 1 ? 'Active' : item.status === 2 ? 'Inactive' : 'Unknown'}
                               </Box>
                             </HStack>
                             <HStack gap={2} mt={2}>
@@ -1346,7 +1401,7 @@ const SettingsPage = () => {
             display="flex"
             alignItems="center"
             justifyContent="center"
-            zIndex="1000"
+            zIndex="9999"
             onClick={() => {
               setShowAddUserModal(false);
               setShowEditUserModal(false);
@@ -1360,6 +1415,8 @@ const SettingsPage = () => {
               p={6}
               maxW="500px"
               w="90%"
+              maxH="90vh"
+              overflowY="auto"
               boxShadow="xl"
               onClick={(e) => e.stopPropagation()}
             >
@@ -1402,29 +1459,54 @@ const SettingsPage = () => {
                   <Text fontSize="13px" fontWeight="500" mb={1}>
                     Department*
                   </Text>
-                  <ChakraSelect.Root
-                    collection={createListCollection({
-                      items: allDepartmentsData?.data?.result?.map((dept: any) => ({
-                        label: dept.name,
-                        value: dept.id,
-                      })) || [],
-                    })}
-                    value={[newUser.departmentId]}
-                    onValueChange={(e) => setNewUser({ ...newUser, departmentId: e.value[0] })}
+                  <select
+                    value={newUser.departmentId}
+                    onChange={(e) => setNewUser({ ...newUser, departmentId: e.target.value })}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      fontSize: '14px',
+                      borderRadius: '6px',
+                      border: '1px solid #D1D5DB',
+                      backgroundColor: 'white',
+                      cursor: 'pointer',
+                      outline: 'none',
+                    }}
+                    required
                   >
-                    <ChakraSelect.Trigger bg="white" borderColor="#D1D5DB" borderRadius="6px">
-                      <ChakraSelect.ValueText placeholder="Select department" />
-                    </ChakraSelect.Trigger>
-                    <ChakraSelect.Positioner>
-                      <ChakraSelect.Content bg="white" borderRadius="8px" boxShadow="lg" zIndex={1500} position="absolute">
-                        {allDepartmentsData?.data?.result?.map((dept: any) => (
-                          <ChakraSelect.Item key={dept.id} item={{ label: dept.name, value: dept.id }}>
-                            {dept.name}
-                          </ChakraSelect.Item>
-                        ))}
-                      </ChakraSelect.Content>
-                    </ChakraSelect.Positioner>
-                  </ChakraSelect.Root>
+                    <option value="" disabled>Select department</option>
+                    {allDepartmentsData?.data?.result?.map((dept: any) => (
+                      <option key={dept.id} value={dept.id}>
+                        {dept.name}
+                      </option>
+                    ))}
+                  </select>
+                </Box>
+                <Box>
+                  <Text fontSize="13px" fontWeight="500" mb={1}>
+                    Role*
+                  </Text>
+                  <select
+                    value={newUser.role}
+                    onChange={(e) => setNewUser({ ...newUser, role: Number(e.target.value) })}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      fontSize: '14px',
+                      borderRadius: '6px',
+                      border: '1px solid #D1D5DB',
+                      backgroundColor: 'white',
+                      cursor: 'pointer',
+                      outline: 'none',
+                    }}
+                    required
+                  >
+                    <option value={1}>Employee</option>
+                    <option value={3}>Admin</option>
+                    <option value={4}>IT Admin</option>
+                    <option value={5}>Operations</option>
+                    <option value={6}>Compliance</option>
+                  </select>
                 </Box>
                 <HStack gap={3} mt={4}>
                   <Button
@@ -1469,7 +1551,7 @@ const SettingsPage = () => {
             display="flex"
             alignItems="center"
             justifyContent="center"
-            zIndex="1000"
+            zIndex="9999"
             onClick={() => {
               setShowAddDepartmentModal(false);
               setShowEditDepartmentModal(false);
@@ -1564,7 +1646,7 @@ const SettingsPage = () => {
             display="flex"
             alignItems="center"
             justifyContent="center"
-            zIndex="1000"
+            zIndex="9999"
             onClick={() => {
               setShowAddCounterpartyModal(false);
               setShowEditCounterpartyModal(false);
@@ -1599,24 +1681,28 @@ const SettingsPage = () => {
                   <Text fontSize="13px" fontWeight="500" mb={1}>
                     Sector*
                   </Text>
-                  <ChakraSelect.Root
-                    collection={createListCollection({ items: sectorOptionsForCreate })}
-                    value={[newCounterparty.sectorId]}
-                    onValueChange={(e) => setNewCounterparty({ ...newCounterparty, sectorId: e.value[0] })}
+                  <select
+                    value={newCounterparty.sectorId}
+                    onChange={(e) => setNewCounterparty({ ...newCounterparty, sectorId: e.target.value })}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      fontSize: '14px',
+                      borderRadius: '6px',
+                      border: '1px solid #D1D5DB',
+                      backgroundColor: 'white',
+                      cursor: 'pointer',
+                      outline: 'none',
+                    }}
+                    required
                   >
-                    <ChakraSelect.Trigger bg="white" borderColor="#D1D5DB" borderRadius="6px">
-                      <ChakraSelect.ValueText placeholder="Select sector" />
-                    </ChakraSelect.Trigger>
-                    <ChakraSelect.Positioner>
-                      <ChakraSelect.Content bg="white" borderRadius="8px" boxShadow="lg" zIndex={1500} position="absolute">
-                        {sectorOptionsForCreate.map((option: any) => (
-                          <ChakraSelect.Item key={option.value} item={option}>
-                            {option.label}
-                          </ChakraSelect.Item>
-                        ))}
-                      </ChakraSelect.Content>
-                    </ChakraSelect.Positioner>
-                  </ChakraSelect.Root>
+                    <option value="" disabled>Select sector</option>
+                    {sectorOptionsForCreate.map((option: any) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
                 </Box>
                 <HStack gap={3} mt={4}>
                   <Button
@@ -1661,7 +1747,7 @@ const SettingsPage = () => {
             display="flex"
             alignItems="center"
             justifyContent="center"
-            zIndex="1000"
+            zIndex="9999"
             onClick={() => {
               setShowAddSectorModal(false);
               setShowEditSectorModal(false);
@@ -1746,7 +1832,7 @@ const SettingsPage = () => {
             display="flex"
             alignItems="center"
             justifyContent="center"
-            zIndex="1000"
+            zIndex="9999"
             onClick={() => {
               setShowDeleteModal(false);
               setShowDeleteDepartmentModal(false);

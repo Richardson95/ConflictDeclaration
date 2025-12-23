@@ -168,13 +168,16 @@ export const dashboardApi = createApi({
         message: string;
         success: boolean;
       },
-      { page?: number; limit?: number }
+      { page?: number; limit?: number; year?: number }
     >({
-      query: ({ page = 1, limit = 10 }) => {
+      query: ({ page = 1, limit = 10, year }) => {
         const params = new URLSearchParams({
           CurrentPage: page.toString(),
           PageSize: limit.toString(),
         });
+        if (year) {
+          params.append('year', year.toString());
+        }
         return `Dashboard/user-declaration-status?${params.toString()}`;
       },
       providesTags: ['UserDeclarationStatus'],

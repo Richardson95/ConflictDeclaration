@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import {
   Box,
   Heading,
@@ -9,81 +9,42 @@ import {
   Text,
   Image,
   RadioGroup,
-  Button as ChakraButton,
 } from '@chakra-ui/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import DashboardLayout from '@/lib/layout/DashboardLayout';
 import leftArrow from '@/assets/icons/left-arrow-1.png';
-import { useGetDeclarationByIdQuery, useNotifyComplianceMutation } from '@/lib/redux/services/declaration.service';
-import { useGetCounterpartiesQuery } from '@/lib/redux/services/counterparty.service';
-import { toaster } from '@/components/ui/toaster';
+import { useGetDeclarationByIdQuery } from '@/lib/redux/services/declaration.service';
 
 const ViewDeclaration = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const declarationId = searchParams.get('id') || '';
-  const [notificationSent, setNotificationSent] = useState(false);
 
   // Fetch declaration data
   const { data: declarationData, isLoading: isLoadingDeclaration } = useGetDeclarationByIdQuery(declarationId, {
     skip: !declarationId,
   });
 
-  // Fetch all counterparties to map IDs to names
-  const { data: counterpartiesData, isLoading: isLoadingCounterparties } = useGetCounterpartiesQuery({
-    page: 1,
-    limit: 200, // Get all counterparties for mapping
-  });
-
-  // Notify compliance mutation
-  const [notifyCompliance, { isLoading: isNotifying }] = useNotifyComplianceMutation();
-
   const declaration = declarationData?.data;
-  const counterparties = counterpartiesData?.data || [];
-  const isLoading = isLoadingDeclaration || isLoadingCounterparties;
+  const isLoading = isLoadingDeclaration;
 
-  // Create a map of counterparty IDs to names
-  const counterpartyMap = React.useMemo(() => {
-    const map: Record<string, string> = {};
-    counterparties.forEach((cp) => {
-      map[cp.id] = cp.name;
-    });
-    return map;
-  }, [counterparties]);
-
-  // Get assessments with counterparty names
+  // Get assessments with counterparty names and sort by conflict status
   const assessments = React.useMemo(() => {
     if (!declaration?.asssessmentDtos) return [];
-    return declaration.asssessmentDtos.map((assessment) => ({
+    const mappedAssessments = declaration.asssessmentDtos.map((assessment) => ({
       ...assessment,
       counterpartyName: typeof assessment.counterparty === 'string'
         ? assessment.counterparty
         : (assessment.counterparty as any)?.name || 'Unknown',
     }));
+
+    // Sort: conflicts (Yes) first, then no conflicts (No)
+    return mappedAssessments.sort((a, b) => {
+      if (a.hasConflict && !b.hasConflict) return -1;
+      if (!a.hasConflict && b.hasConflict) return 1;
+      return 0;
+    });
   }, [declaration]);
-
-  // Check if there are any conflicts
-  const hasConflicts = React.useMemo(() => {
-    return assessments.some((a) => a.hasConflict);
-  }, [assessments]);
-
-  const handleNotifyCompliance = async () => {
-    if (!declarationId) return;
-
-    try {
-      const result = await notifyCompliance({ declarationId }).unwrap();
-      setNotificationSent(true);
-      toaster.success({
-        title: 'Compliance Notified',
-        description: result.message || 'The compliance department has been notified successfully.',
-      });
-    } catch (error: any) {
-      toaster.error({
-        title: 'Notification Failed',
-        description: error?.data?.message || 'Failed to notify compliance department.',
-      });
-    }
-  };
 
   // Format date for display
   const formattedDate = declaration?.submittedAt
@@ -180,41 +141,6 @@ const ViewDeclaration = () => {
                 ))}
               </VStack>
             </Box>
-
-            {/* Notify Compliance Section */}
-            {hasConflicts && (
-              <Box bg="white" borderRadius="12px" boxShadow="xl" p={{ base: 4, md: 6 }} mb={6}>
-                <VStack gap={4} align="stretch">
-                  <Box bg="#FFF3E0" px={4} py={3} borderRadius="8px">
-                    <Text fontSize="14px" color="#E65100" fontWeight="500">
-                      ⚠️ This declaration contains conflict(s) of interest
-                    </Text>
-                  </Box>
-
-                  <Text fontSize="14px" color="#666">
-                    {notificationSent
-                      ? 'The compliance department has been notified about the conflict(s) in this declaration.'
-                      : 'Please notify the compliance department about the conflict(s) identified in this declaration.'}
-                  </Text>
-
-                  <ChakraButton
-                    bg={notificationSent ? '#E0E0E0' : '#227CBF'}
-                    color={notificationSent ? '#999' : 'white'}
-                    fontSize="14px"
-                    fontWeight="500"
-                    h="44px"
-                    borderRadius="8px"
-                    cursor={notificationSent ? 'not-allowed' : 'pointer'}
-                    _hover={notificationSent ? {} : { bg: '#1B6AA3' }}
-                    _active={notificationSent ? {} : { bg: '#165A8C' }}
-                    disabled={notificationSent || isNotifying}
-                    onClick={handleNotifyCompliance}
-                  >
-                    {isNotifying ? 'Notifying...' : notificationSent ? 'Compliance Notified ✓' : 'Notify Compliance Department'}
-                  </ChakraButton>
-                </VStack>
-              </Box>
-            )}
           </>
         )}
       </Box>
