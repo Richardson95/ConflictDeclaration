@@ -35,63 +35,23 @@ const ConflictsPolicy = () => {
           p={{ base: 0, md: 8 }}
           mb={6}
         >
-          <VStack gap={{ base: 7, md: 6 }} align="stretch">
-            {/* Header with Draft and Logo */}
-            <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={4}>
-              <Text fontSize="12px" fontWeight="700" color="#FF0000">
-                DRAFT VERSION
-              </Text>
-              <Image
-                src="/infracredit-logo.svg"
-                alt="InfraCredit"
-                h="35px"
-                objectFit="contain"
-              />
-            </Box>
-
-            {/* Policy Document Box */}
+          <VStack gap={{ base: 2, md: 2 }} align="stretch">
+            {/* Policy Document Box - PDF Viewer */}
             <Box
-              border="2px solid #333"
+              border="2px solid #E0E0E0"
               borderRadius={{ base: '12px', md: '8px' }}
-              p={{ base: 8, md: 12 }}
-              minH={{ base: '350px', md: '400px' }}
-              display="flex"
-              flexDirection="column"
-              alignItems="center"
-              justifyContent="center"
+              overflow="hidden"
+              minH={{ base: '500px', md: '600px' }}
+              h={{ base: '68vh', md: '73vh' }}
               bg="white"
             >
-              <VStack gap={8} align="center">
-                <Text
-                  fontSize="15px"
-                  fontWeight="600"
-                  color="#333"
-                  textAlign="center"
-                  letterSpacing="0.5px"
-                >
-                  INFRASTRUCTURE CREDIT GUARANTEE COMPANY PLC
-                </Text>
-
-                <VStack gap={2} align="center">
-                  <Text
-                    fontSize="14px"
-                    fontWeight="600"
-                    color="#333"
-                    textAlign="center"
-                  >
-                    PERSONAL ACCOUNT DEALING POLICY
-                  </Text>
-                  <Text
-                    fontSize="12px"
-                    fontWeight="500"
-                    color="#333"
-                    textAlign="center"
-                    fontStyle="italic"
-                  >
-                    (proposed to be embedded in Code of Ethics & Business Conduct Policy)
-                  </Text>
-                </VStack>
-              </VStack>
+              <iframe
+                src="https://icgcprdrgdiag.blob.core.windows.net/ces-images/policydoc.pdf#view=FitH"
+                width="100%"
+                height="100%"
+                style={{ border: 'none', display: 'block' }}
+                title="Personal Account Dealing Policy"
+              />
             </Box>
 
             {/* Checkbox Agreement */}
