@@ -40,7 +40,7 @@ ChartJS.register(ArcElement, Tooltip, Legend);
 const EmployeesPage = () => {
   const router = useRouter();
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [itemsPerPage, setItemsPerPage] = useState(100);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('');
   const [selectedDepartment, setSelectedDepartment] = useState('');
@@ -217,7 +217,7 @@ const EmployeesPage = () => {
     datasets: [
       {
         data: [statusStats.completed, statusStats.pending],
-        backgroundColor: ['#47B65C', '#D1D5DB'],
+        backgroundColor: ['#47B65C', '#FF8A65'],
         borderWidth: 0,
       },
     ],
@@ -627,8 +627,8 @@ const EmployeesPage = () => {
                     <Box w="150px" textAlign="center">
                       <Box
                         display="inline-block"
-                        bg={item.statusOfDeclaration === 'Completed' ? '#E8F5E9' : '#F5F5F5'}
-                        color={item.statusOfDeclaration === 'Completed' ? '#47B65C' : '#666'}
+                        bg={item.statusOfDeclaration === 'Completed' ? '#E8F5E9' : '#FFE8E0'}
+                        color={item.statusOfDeclaration === 'Completed' ? '#47B65C' : '#FF8A65'}
                         fontSize="12px"
                         fontWeight="500"
                         px={3}
@@ -722,8 +722,8 @@ const EmployeesPage = () => {
                       </Text>
                       <Box
                         display="inline-block"
-                        bg={item.statusOfDeclaration === 'Completed' ? '#E8F5E9' : '#F5F5F5'}
-                        color={item.statusOfDeclaration === 'Completed' ? '#47B65C' : '#666'}
+                        bg={item.statusOfDeclaration === 'Completed' ? '#E8F5E9' : '#FFE8E0'}
+                        color={item.statusOfDeclaration === 'Completed' ? '#47B65C' : '#FF8A65'}
                         fontSize="12px"
                         fontWeight="500"
                         px={3}

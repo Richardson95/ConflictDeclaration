@@ -13,10 +13,9 @@ const nextConfig: NextConfig = {
     // Speed up webpack compilation
     webpackBuildWorker: true,
   },
+  // Turbopack is enabled by default in Next.js 16
+  turbopack: {},
   reactStrictMode: true,
-  eslint: {
-    dirs: ['src'],
-  },
   outputFileTracingRoot: path.join(__dirname),
   // Optimize compilation
   compiler: {

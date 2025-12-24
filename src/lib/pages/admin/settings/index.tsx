@@ -59,7 +59,7 @@ import {
 const SettingsPage = () => {
   const [activeTab, setActiveTab] = useState('Employees');
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [itemsPerPage, setItemsPerPage] = useState(200);
   const [searchQuery, setSearchQuery] = useState('');
 
   // Employee/User state
@@ -115,6 +115,10 @@ const SettingsPage = () => {
     isActive: true,
   });
 
+  // Activity log date filters
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+
   // API Queries - Fetch ALL users for client-side filtering
   const { data: usersData, isLoading: isLoadingUsers, refetch: refetchUsers } = useGetUsersQuery({
     page: 1,
@@ -123,7 +127,7 @@ const SettingsPage = () => {
 
   const { data: departmentsData, isLoading: isLoadingDepartments } = useGetDepartmentsQuery({
     page: activeTab === 'Departments' ? currentPage : 1,
-    limit: activeTab === 'Departments' ? itemsPerPage : 10,
+    limit: activeTab === 'Departments' ? 100 : 10,
   });
 
   // Fetch all departments for dropdown (using paginated endpoint with large limit)
@@ -140,7 +144,7 @@ const SettingsPage = () => {
 
   const { data: sectorsData, isLoading: isLoadingSectors } = useGetSectorsQuery({
     page: activeTab === 'Sectors' ? currentPage : 1,
-    limit: activeTab === 'Sectors' ? itemsPerPage : 10,
+    limit: activeTab === 'Sectors' ? 100 : 10,
   });
 
   const { data: activeSectorsData } = useGetActiveSectorsQuery({
@@ -148,9 +152,12 @@ const SettingsPage = () => {
     limit: 100,
   });
 
+  // Fetch ALL activity logs for client-side filtering
   const { data: activityLogsData, isLoading: isLoadingActivityLogs } = useGetUserActivitiesQuery({
-    page: activeTab === 'Activity log' ? currentPage : 1,
-    limit: activeTab === 'Activity log' ? itemsPerPage : 10,
+    page: 1,
+    limit: 10000, // Fetch all activity logs
+    startDate: startDate || undefined,
+    endDate: endDate || undefined,
   });
 
   // API Mutations
@@ -176,6 +183,8 @@ const SettingsPage = () => {
   useEffect(() => {
     setCurrentPage(1);
     setSearchQuery('');
+    setStartDate('');
+    setEndDate('');
   }, [activeTab]);
 
   // Reset page when filters change for Employees tab
@@ -192,6 +201,13 @@ const SettingsPage = () => {
     }
   }, [selectedSector, searchQuery, activeTab]);
 
+  // Reset page when filters change for Activity log tab
+  useEffect(() => {
+    if (activeTab === 'Activity log') {
+      setCurrentPage(1);
+    }
+  }, [startDate, endDate, searchQuery, activeTab]);
+
   // Clear all filters
   const handleClearFilters = () => {
     setSearchQuery('');
@@ -199,13 +215,54 @@ const SettingsPage = () => {
     setSelectedRole('');
     setSelectedStatus('');
     setSelectedSector('');
+    setStartDate('');
+    setEndDate('');
     setCurrentPage(1);
   };
 
   // Check if any filters are active
-  const hasActiveFilters = searchQuery || selectedDepartment || selectedStatus || selectedSector;
+  const hasActiveFilters = searchQuery || selectedDepartment || selectedStatus || selectedSector || startDate || endDate;
 
   const tabs = ['Employees', 'Departments', 'Counterparties', 'Sectors', 'Activity log'];
+
+  // Helper function to parse activity details into user-friendly text
+  const parseActivityDetails = (details: string): string => {
+    if (!details) return '';
+
+    // If it's already clean text (doesn't contain technical patterns), return as is
+    if (!details.includes("Id: '") && !details.includes("'DepartmentId:")) {
+      return details;
+    }
+
+    // Extract meaningful information from technical strings
+    let parsed = '';
+
+    // Check for conflict check details
+    const refNumberMatch = details.match(/ReferenceNumber:\s*'([^']+)'/);
+    const hasConflictMatch = details.match(/HasConflict:\s*'(True|False)'/);
+
+    if (refNumberMatch) {
+      const conflictStatus = hasConflictMatch && hasConflictMatch[1] === 'True' ? 'Conflict detected' : 'No conflict';
+      parsed = `Conflict check performed - Reference: ${refNumberMatch[1]} - ${conflictStatus}`;
+      return parsed;
+    }
+
+    // Check for department updates
+    const deptIdMatch = details.match(/DepartmentId:\s*'([^']+)'.*=>\s*'([^']+)'/);
+    if (deptIdMatch) {
+      parsed = 'Department information updated';
+      return parsed;
+    }
+
+    // Check for general Details field
+    const detailsFieldMatch = details.match(/Details:\s*'([^']+)'/);
+    if (detailsFieldMatch) {
+      return detailsFieldMatch[1];
+    }
+
+    // If we can't parse it meaningfully, return a generic message
+    return 'System activity recorded';
+  };
 
   // Get current tab data
   const getCurrentTabData = () => {
@@ -285,6 +342,30 @@ const SettingsPage = () => {
         const matchesSector = !selectedSector || item.sectorName === selectedSector;
         return matchesSearch && matchesSector;
       });
+    } else if (activeTab === 'Activity log') {
+      return data.filter((item: any) => {
+        if (searchQuery === '') return true;
+        const query = searchQuery.toLowerCase();
+        const matchesInitiator = item.initiator?.toLowerCase().includes(query);
+        const matchesAction = item.action?.toLowerCase().includes(query);
+        const matchesDetails = item.details?.toLowerCase().includes(query);
+
+        // Search by date - format the date the same way it's displayed
+        let matchesDate = false;
+        if (item.createdAt) {
+          const formattedDate = new Date(item.createdAt).toLocaleString('en-US', {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true,
+          }).toLowerCase();
+          matchesDate = formattedDate.includes(query);
+        }
+
+        return matchesInitiator || matchesAction || matchesDetails || matchesDate;
+      });
     } else {
       return data.filter((item: any) => {
         if (activeTab === 'Departments' || activeTab === 'Sectors') {
@@ -298,20 +379,20 @@ const SettingsPage = () => {
   // Pagination - Apply to filtered data
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
-  const paginatedData = (activeTab === 'Employees' || activeTab === 'Counterparties')
+  const paginatedData = (activeTab === 'Employees' || activeTab === 'Counterparties' || activeTab === 'Activity log')
     ? filteredData.slice(startIndex, endIndex)
     : filteredData;
 
   // Calculate total pages based on filtered data for client-side filtered tabs
-  const actualTotalPages = (activeTab === 'Employees' || activeTab === 'Counterparties')
+  const actualTotalPages = (activeTab === 'Employees' || activeTab === 'Counterparties' || activeTab === 'Activity log')
     ? Math.ceil(filteredData.length / itemsPerPage)
     : totalPages;
-  const actualTotalRecords = (activeTab === 'Employees' || activeTab === 'Counterparties')
+  const actualTotalRecords = (activeTab === 'Employees' || activeTab === 'Counterparties' || activeTab === 'Activity log')
     ? filteredData.length
     : totalRecords;
 
   const renderPageNumbers = useMemo(() => {
-    const pagesToShow = (activeTab === 'Employees' || activeTab === 'Counterparties') ? actualTotalPages : totalPages;
+    const pagesToShow = (activeTab === 'Employees' || activeTab === 'Counterparties' || activeTab === 'Activity log') ? actualTotalPages : totalPages;
     const pages: (number | string)[] = [];
     if (pagesToShow <= 10) {
       for (let i = 1; i <= pagesToShow; i++) {
@@ -806,6 +887,40 @@ const SettingsPage = () => {
                 </ChakraSelect.Root>
               )}
 
+              {/* Activity log date filters */}
+              {activeTab === 'Activity log' && (
+                <>
+                  <Input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    placeholder="Start Date"
+                    maxW="180px"
+                    size="sm"
+                    bg="white"
+                    borderColor="#D1D5DB"
+                    _hover={{ borderColor: '#9CA3AF' }}
+                    _focus={{ borderColor: '#227CBF', boxShadow: 'none' }}
+                    borderRadius="6px"
+                    height="40px"
+                  />
+                  <Input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    placeholder="End Date"
+                    maxW="180px"
+                    size="sm"
+                    bg="white"
+                    borderColor="#D1D5DB"
+                    _hover={{ borderColor: '#9CA3AF' }}
+                    _focus={{ borderColor: '#227CBF', boxShadow: 'none' }}
+                    borderRadius="6px"
+                    height="40px"
+                  />
+                </>
+              )}
+
               {/* Clear Filters Button */}
               {hasActiveFilters && (
                 <ChakraButton
@@ -1190,9 +1305,16 @@ const SettingsPage = () => {
                               </Text>
                             </Box>
                             <Box flex="2">
-                              <Text fontSize="13px" color="#333">
-                                {item.action || item.details || 'N/A'}
-                              </Text>
+                              <VStack align="start" gap={1}>
+                                <Text fontSize="13px" fontWeight="600" color="#333">
+                                  {item.action || 'N/A'}
+                                </Text>
+                                {item.details && parseActivityDetails(item.details) && (
+                                  <Text fontSize="12px" color="#666">
+                                    {parseActivityDetails(item.details)}
+                                  </Text>
+                                )}
+                              </VStack>
                             </Box>
                             <Box flex="1">
                               <Text fontSize="13px" color="#333">

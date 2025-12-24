@@ -28,7 +28,7 @@ import { useGetDeclarationsQuery } from '@/lib/redux/services/declaration.servic
 
 const CounterpartiesPage = () => {
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [itemsPerPage, setItemsPerPage] = useState(100);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSector, setSelectedSector] = useState('');
   const [selectedConflict, setSelectedConflict] = useState('');

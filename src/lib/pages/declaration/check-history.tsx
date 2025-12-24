@@ -30,7 +30,7 @@ const DeclarationCheckHistory = () => {
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState<string>(currentYear.toString());
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [itemsPerPage, setItemsPerPage] = useState(100);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [showCertificateModal, setShowCertificateModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState<any>(null);

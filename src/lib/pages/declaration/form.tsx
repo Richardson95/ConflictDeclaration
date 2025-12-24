@@ -421,7 +421,7 @@ const DeclarationForm = () => {
           )}
         </Box>
 
-        {/* Next Button */}
+        {/* Submit Button */}
         <Box display="flex" justifyContent="flex-end" pb={{ base: 4, md: 6 }}>
           <Button
             bg="#47B65C"
@@ -443,7 +443,7 @@ const DeclarationForm = () => {
               }
             }}
           >
-            Next
+            Submit
           </Button>
         </Box>
       </Box>
@@ -467,9 +467,10 @@ const DeclarationForm = () => {
           <Box
             bg="white"
             borderRadius={{ base: '10px', md: '12px' }}
-            maxW={{ base: '100%', md: '420px' }}
-            w={{ base: '100%', md: '80%' }}
-            h={{ base: '95vh', md: '100vh' }}
+            maxW={{ base: '100%', md: '70vw' }}
+            w={{ base: '100%', md: '70vw' }}
+            h={{ base: '95vh', md: '95vh' }}
+            maxH="95vh"
             boxShadow="2xl"
             onClick={(e) => e.stopPropagation()}
             display="flex"
@@ -488,7 +489,7 @@ const DeclarationForm = () => {
             </Box>
 
             {/* Modal Content */}
-            <VStack gap={{ base: 1.5, md: 1.5 }} p={{ base: 4, md: 6 }} align="stretch" flex="1" justify="space-between">
+            <VStack gap={{ base: 1.5, md: 1 }} p={{ base: 4, md: 6 }} align="stretch" flex="1" justify="space-between">
               <Box flex="1" overflow="hidden">
                 {/* Policy Document Box - PDF Viewer */}
                 <Box
@@ -496,7 +497,7 @@ const DeclarationForm = () => {
                   borderRadius="6px"
                   overflow="hidden"
                   bg="white"
-                  h={{ base: 'calc(95vh - 180px)', md: 'calc(100vh - 195px)' }}
+                  h={{ base: 'calc(95vh - 230px)', md: 'calc(95vh - 190px)' }}
                 >
                   <iframe
                     src="https://icgcprdrgdiag.blob.core.windows.net/ces-images/policydoc.pdf#view=FitH"
@@ -508,13 +509,13 @@ const DeclarationForm = () => {
                 </Box>
               </Box>
 
-              <Box flexShrink={0}>
+              <Box flexShrink={0} mt={{ base: 3, md: 2 }}>
                 {/* Checkbox Agreement */}
                 <Checkbox.Root
                   checked={isAgreed}
                   onCheckedChange={(e) => setIsAgreed(e.checked === true)}
                   size="sm"
-                  mb={3}
+                  mb={{ base: 3, md: 3 }}
                 >
                   <Checkbox.HiddenInput />
                   <Checkbox.Control>
@@ -543,7 +544,7 @@ const DeclarationForm = () => {
                   onClick={handleSubmitDeclaration}
                   loading={isSubmitting}
                 >
-                  {isSubmitting ? 'Submitting...' : 'Submit'}
+                  {isSubmitting ? 'Submitting...' : 'Complete Declaration'}
                 </Button>
               </Box>
             </VStack>

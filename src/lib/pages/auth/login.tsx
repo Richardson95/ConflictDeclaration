@@ -124,7 +124,7 @@ const Login = () => {
               color="#333333"
               textAlign="center"
             >
-              Conflict Check Portal
+              Conflict Check Management System 1.0
             </Heading>
 
             <Text

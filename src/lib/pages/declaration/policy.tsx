@@ -91,7 +91,7 @@ const ConflictsPolicy = () => {
                 }
               }}
             >
-              Submit
+              Complete Declaration
             </Button>
           </VStack>
         </Box>

@@ -6,7 +6,6 @@ import {
   HStack,
   Text,
   Box,
-  Badge,
   Image,
   VStack,
   MenuContent,
@@ -17,8 +16,9 @@ import {
   IconButton,
   Select as ChakraSelect,
   createListCollection,
+  Button,
 } from '@chakra-ui/react';
-import { FiBell, FiChevronDown } from 'react-icons/fi';
+import { FiChevronDown, FiArrowLeft } from 'react-icons/fi';
 import { useRouter } from 'next/navigation';
 import { useAppDispatch, useAppSelector } from '@/lib/redux/store';
 import { logOut } from '@/lib/redux/slices/authSlice';
@@ -176,30 +176,48 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
               display={{ base: 'block', lg: 'none' }}
             />
             <Text
-              fontSize="18px"
+              fontSize="28px"
               fontWeight="600"
               color="#227CBF"
               display={{ base: 'none', md: 'block' }}
             >
-              Conflicts Check Portal
+              Conflict Check Management System 1.0
             </Text>
           </HStack>
 
-          {/* Right side - Notification and Profile */}
+          {/* Right side - Back to Dashboard and Profile */}
           <HStack gap={{ base: '2', md: '4' }}>
-            {/* Notification Bell */}
-            <Box position="relative" role="group">
-              <IconButton
-                variant="ghost"
-                aria-label="notification"
-                _hover={{ bg: 'gray.100' }}
-                transition="all 0.2s"
-                size="lg"
+            {/* Back to Dashboard Button */}
+            <>
+              {/* Desktop version with text */}
+              <Button
+                onClick={handleBackToDashboard}
+                bg="#2E7BB4"
+                color="white"
+                _hover={{ bg: '#236096' }}
+                fontSize="14px"
+                fontWeight="500"
+                px={4}
+                h="40px"
+                display={{ base: 'none', md: 'flex' }}
+                gap={2}
               >
-                <FiBell size={28} />
+                <FiArrowLeft size={18} />
+                Back to Dashboard
+              </Button>
+              {/* Mobile version - icon only */}
+              <IconButton
+                onClick={handleBackToDashboard}
+                bg="#2E7BB4"
+                color="white"
+                _hover={{ bg: '#236096' }}
+                aria-label="Back to Dashboard"
+                size="lg"
+                display={{ base: 'flex', md: 'none' }}
+              >
+                <FiArrowLeft size={20} />
               </IconButton>
-              {/* TODO: Integrate with notification API to show actual count */}
-            </Box>
+            </>
 
             {/* User Profile Dropdown */}
             <Box position="relative">
@@ -251,19 +269,6 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
                   mt={1}
                   zIndex={1000}
                 >
-                  <MenuItem
-                    value="dashboard"
-                    fontSize="13px"
-                    py={1.5}
-                    px={3}
-                    bg="white"
-                    _hover={{ bg: 'gray.50' }}
-                    cursor="pointer"
-                    onClick={handleBackToDashboard}
-                    borderRadius="4px"
-                  >
-                    Back to Dashboard
-                  </MenuItem>
                   <MenuItem
                     value="upload"
                     fontSize="13px"
