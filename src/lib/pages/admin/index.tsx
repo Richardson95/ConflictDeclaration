@@ -25,7 +25,7 @@ import { useGetUsersQuery } from '@/lib/redux/services/employee.service';
 const AdminPanel = () => {
   const [activeTab, setActiveTab] = useState<'check' | 'declaration'>('check');
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [itemsPerPage, setItemsPerPage] = useState(100);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedEmployee, setSelectedEmployee] = useState('');
   const [selectedCounterparty, setSelectedCounterparty] = useState('');

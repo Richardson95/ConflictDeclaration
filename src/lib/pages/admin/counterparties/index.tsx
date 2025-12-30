@@ -28,7 +28,7 @@ import { useGetDeclarationsQuery } from '@/lib/redux/services/declaration.servic
 
 const CounterpartiesPage = () => {
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [itemsPerPage, setItemsPerPage] = useState(100);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSector, setSelectedSector] = useState('');
   const [selectedConflict, setSelectedConflict] = useState('');
@@ -69,7 +69,7 @@ const CounterpartiesPage = () => {
 
   const handleDownloadReport = async (format: 'csv' | 'excel') => {
     try {
-      const blob = await downloadReport({ format }).unwrap();
+      const blob = await downloadReport({ format, year: selectedYear }).unwrap();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -87,6 +87,7 @@ const CounterpartiesPage = () => {
   const { data: counterpartiesData, isLoading: isLoadingCounterparties } = useGetCounterpartyConflictSummaryQuery({
     page: currentPage,
     limit: itemsPerPage,
+    year: selectedYear,
   });
 
   // Fetch sectors for filter

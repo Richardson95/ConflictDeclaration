@@ -143,13 +143,16 @@ export const dashboardApi = createApi({
         message: string;
         success: boolean;
       },
-      { page?: number; limit?: number }
+      { page?: number; limit?: number; year?: number }
     >({
-      query: ({ page = 1, limit = 10 }) => {
+      query: ({ page = 1, limit = 10, year }) => {
         const params = new URLSearchParams({
           CurrentPage: page.toString(),
           PageSize: limit.toString(),
         });
+        if (year) {
+          params.append('year', year.toString());
+        }
         return `Dashboard/counterparty-conflict-summary?${params.toString()}`;
       },
       providesTags: ['DashboardMetrics'],
@@ -211,13 +214,21 @@ export const dashboardApi = createApi({
     // Download counterparty conflict summary report
     downloadCounterpartyConflictSummary: builder.mutation<
       Blob,
-      { format: 'csv' | 'excel' }
+      { format: 'csv' | 'excel'; year?: number }
     >({
-      query: ({ format }) => ({
-        url: `Dashboard/download-counterparty-conflict-summary?format=${format}`,
-        method: 'GET',
-        responseHandler: (response) => response.blob(),
-      }),
+      query: ({ format, year }) => {
+        const params = new URLSearchParams({
+          format,
+        });
+        if (year) {
+          params.append('year', year.toString());
+        }
+        return {
+          url: `Dashboard/download-counterparty-conflict-summary?${params.toString()}`,
+          method: 'GET',
+          responseHandler: (response) => response.blob(),
+        };
+      },
     }),
   }),
 });

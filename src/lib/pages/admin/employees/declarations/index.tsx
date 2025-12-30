@@ -28,7 +28,7 @@ const EmployeeDeclarationHistory = () => {
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState<string>(currentYear.toString());
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [itemsPerPage, setItemsPerPage] = useState(100);
   const [dateSearch, setDateSearch] = useState<string>('');
 
   // Fetch employee declarations from API

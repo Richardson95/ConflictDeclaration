@@ -211,13 +211,15 @@ export const adminApi = createApi({
         message: string;
         success: boolean;
       },
-      { page?: number; limit?: number }
+      { page?: number; limit?: number; startDate?: string; endDate?: string }
     >({
-      query: ({ page = 1, limit = 10 }) => {
+      query: ({ page = 1, limit = 10, startDate, endDate }) => {
         const params = new URLSearchParams({
           CurrentPage: page.toString(),
           PageSize: limit.toString(),
         });
+        if (startDate) params.append('StartDate', startDate);
+        if (endDate) params.append('EndDate', endDate);
         return `useractivities?${params.toString()}`;
       },
     }),

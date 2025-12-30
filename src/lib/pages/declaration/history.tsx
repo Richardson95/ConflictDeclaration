@@ -27,7 +27,7 @@ const DeclarationHistory = () => {
   const [selectedYear, setSelectedYear] = useState<string>(currentYear.toString());
   const [sortBy, setSortBy] = useState<string>('date');
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [itemsPerPage, setItemsPerPage] = useState(100);
   const [dateSearch, setDateSearch] = useState<string>('');
 
   // Get current user from /Users/me endpoint

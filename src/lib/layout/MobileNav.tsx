@@ -5,7 +5,6 @@ import {
   HStack,
   Text,
   Box,
-  Badge,
   Image,
   VStack,
   MenuContent,
@@ -14,8 +13,9 @@ import {
   MenuTrigger,
   Avatar,
   IconButton,
+  Button,
 } from '@chakra-ui/react';
-import { FiBell, FiChevronDown } from 'react-icons/fi';
+import { FiChevronDown, FiSettings } from 'react-icons/fi';
 import { useRouter } from 'next/navigation';
 import { useAppDispatch, useAppSelector } from '@/lib/redux/store';
 import { logOut } from '@/lib/redux/slices/authSlice';
@@ -139,32 +139,52 @@ const MobileNav = () => {
 
       {/* Center - Title */}
       <Text
-        fontSize="20px"
+        fontSize="28px"
         fontWeight="600"
         color="#2E7BB4"
         display={{ base: 'none', md: 'block' }}
         position="absolute"
-        left="50%"
+        left="42%"
         transform="translateX(-50%)"
       >
-        Conflict Check Portal
+        Conflict Check Management System 1.0
       </Text>
 
-      {/* Right side - Notification and Profile */}
+      {/* Right side - Admin Panel and Profile */}
       <HStack gap={{ base: '2', md: '4' }}>
-        {/* Notification Bell */}
-        <Box position="relative" role="group">
-          <IconButton
-            variant="ghost"
-            aria-label="notification"
-            _hover={{ bg: 'gray.100' }}
-            transition="all 0.2s"
-            size="lg"
-          >
-            <FiBell size={28} />
-          </IconButton>
-          {/* TODO: Integrate with notification API to show actual count */}
-        </Box>
+        {/* Admin Panel Button - Only visible to admins */}
+        {isAdmin && (
+          <>
+            {/* Desktop version with text */}
+            <Button
+              onClick={handleAdminPanel}
+              bg="#2E7BB4"
+              color="white"
+              _hover={{ bg: '#236096' }}
+              fontSize="14px"
+              fontWeight="500"
+              px={4}
+              h="40px"
+              display={{ base: 'none', md: 'flex' }}
+              gap={2}
+            >
+              <FiSettings size={18} />
+              Admin Panel
+            </Button>
+            {/* Mobile version - icon only */}
+            <IconButton
+              onClick={handleAdminPanel}
+              bg="#2E7BB4"
+              color="white"
+              _hover={{ bg: '#236096' }}
+              aria-label="Admin Panel"
+              size="lg"
+              display={{ base: 'flex', md: 'none' }}
+            >
+              <FiSettings size={20} />
+            </IconButton>
+          </>
+        )}
 
         {/* User Profile Dropdown */}
         <Box position="relative">
@@ -216,21 +236,6 @@ const MobileNav = () => {
               mt={1}
               zIndex={1000}
             >
-              {isAdmin && (
-                <MenuItem
-                  value="admin"
-                  fontSize="13px"
-                  py={1.5}
-                  px={3}
-                  bg="white"
-                  _hover={{ bg: 'gray.50' }}
-                  cursor="pointer"
-                  onClick={handleAdminPanel}
-                  borderRadius="4px"
-                >
-                  Admin Panel
-                </MenuItem>
-              )}
               <MenuItem
                 value="upload"
                 fontSize="13px"

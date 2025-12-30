@@ -8,11 +8,11 @@ type RootLayoutProps = {
   children: React.ReactNode;
 };
 
-const APP_NAME = 'Conflict Check Portal';
+const APP_NAME = 'Conflict Check Management System 1.0';
 
 export const metadata: Metadata = {
-  title: { default: APP_NAME, template: '%s | Conflict Check Portal' },
-  description: 'InfraCredit Conflict Check Portal',
+  title: { default: APP_NAME, template: '%s | Conflict Check Management System 1.0' },
+  description: 'InfraCredit Conflict Check Management System 1.0',
   applicationName: APP_NAME,
   appleWebApp: {
     capable: true,
@@ -23,8 +23,8 @@ export const metadata: Metadata = {
     telephone: false,
   },
   openGraph: {
-    title: 'Conflict Check Portal',
-    description: 'InfraCredit Conflict Check Portal',
+    title: 'Conflict Check Management System 1.0',
+    description: 'InfraCredit Conflict Check Management System 1.0',
   },
 };
 
