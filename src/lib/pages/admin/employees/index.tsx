@@ -314,7 +314,7 @@ const EmployeesPage = () => {
   };
 
   return (
-    <AdminLayout>
+    <AdminLayout hideBackButton={true}>
       <Box id="pdf-content" px={{ base: 4, md: 6 }} py={6}>
         {/* Header */}
         <HStack justify="space-between" mb={6}>

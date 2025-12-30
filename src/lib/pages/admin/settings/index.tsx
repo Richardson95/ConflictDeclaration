@@ -730,7 +730,7 @@ const SettingsPage = () => {
   }));
 
   return (
-    <AdminLayout>
+    <AdminLayout hideBackButton={true}>
       <Box px={{ base: 4, md: 6 }} py={6}>
         {/* Header */}
         <Text fontSize="24px" fontWeight="600" color="#2C3E50" mb={6}>

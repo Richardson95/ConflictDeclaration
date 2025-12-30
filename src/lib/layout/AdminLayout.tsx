@@ -31,9 +31,10 @@ import { hasAdminAccess } from '@/lib/constants/roles';
 
 interface AdminLayoutProps {
   children: React.ReactNode;
+  hideBackButton?: boolean;
 }
 
-const AdminLayout = ({ children }: AdminLayoutProps) => {
+const AdminLayout = ({ children, hideBackButton = false }: AdminLayoutProps) => {
   const router = useRouter();
   const dispatch = useAppDispatch();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -188,36 +189,38 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
           {/* Right side - Back to Dashboard and Profile */}
           <HStack gap={{ base: '2', md: '4' }}>
             {/* Back to Dashboard Button */}
-            <>
-              {/* Desktop version with text */}
-              <Button
-                onClick={handleBackToDashboard}
-                bg="#2E7BB4"
-                color="white"
-                _hover={{ bg: '#236096' }}
-                fontSize="14px"
-                fontWeight="500"
-                px={4}
-                h="40px"
-                display={{ base: 'none', md: 'flex' }}
-                gap={2}
-              >
-                <FiArrowLeft size={18} />
-                Back to Dashboard
-              </Button>
-              {/* Mobile version - icon only */}
-              <IconButton
-                onClick={handleBackToDashboard}
-                bg="#2E7BB4"
-                color="white"
-                _hover={{ bg: '#236096' }}
-                aria-label="Back to Dashboard"
-                size="lg"
-                display={{ base: 'flex', md: 'none' }}
-              >
-                <FiArrowLeft size={20} />
-              </IconButton>
-            </>
+            {!hideBackButton && (
+              <>
+                {/* Desktop version with text */}
+                <Button
+                  onClick={handleBackToDashboard}
+                  bg="#2E7BB4"
+                  color="white"
+                  _hover={{ bg: '#236096' }}
+                  fontSize="14px"
+                  fontWeight="500"
+                  px={4}
+                  h="40px"
+                  display={{ base: 'none', md: 'flex' }}
+                  gap={2}
+                >
+                  <FiArrowLeft size={18} />
+                  Back to Dashboard
+                </Button>
+                {/* Mobile version - icon only */}
+                <IconButton
+                  onClick={handleBackToDashboard}
+                  bg="#2E7BB4"
+                  color="white"
+                  _hover={{ bg: '#236096' }}
+                  aria-label="Back to Dashboard"
+                  size="lg"
+                  display={{ base: 'flex', md: 'none' }}
+                >
+                  <FiArrowLeft size={20} />
+                </IconButton>
+              </>
+            )}
 
             {/* User Profile Dropdown */}
             <Box position="relative">

@@ -13,11 +13,16 @@ import {
 } from '@chakra-ui/react';
 import { Button } from '@/components/ui';
 import { LuHistory, LuDownload } from 'react-icons/lu';
+import { FiSettings } from 'react-icons/fi';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useGetCounterpartiesQuery, useCheckConflictMutation } from '@/lib/redux/services/counterparty.service';
 import type { ICounterparty, IConflictCheckResponse } from '@/lib/interfaces/counterparty.interfaces';
+import { useGetCurrentUserQuery } from '@/lib/redux/services/auth.service';
+import { hasAdminAccess } from '@/lib/constants/roles';
 
 const Dashboard = () => {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(100);
@@ -27,6 +32,11 @@ const Dashboard = () => {
   const [notificationSent, setNotificationSent] = useState(false);
   const [conflictCheckResult, setConflictCheckResult] = useState<IConflictCheckResponse | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
+
+  // Fetch current user data to check role
+  const { data: currentUserData } = useGetCurrentUserQuery();
+  const currentUser = currentUserData?.data;
+  const isAdmin = hasAdminAccess(currentUser?.role);
 
   // Fetch counterparties from API
   const { data, isLoading, error } = useGetCounterpartiesQuery({
@@ -60,6 +70,10 @@ const Dashboard = () => {
       setNotificationSent(true);
     }
   }, [selectedCounterparty]);
+
+  const handleAdminPanel = useCallback(() => {
+    router.push('/admin');
+  }, [router]);
 
   const handleDownloadReport = useCallback(async () => {
     if (!conflictCheckResult) {
@@ -292,6 +306,25 @@ const Dashboard = () => {
                 </HStack>
               </Button>
             </Link>
+
+            {isAdmin && (
+              <Button
+                bg="#2E7BB4"
+                color="white"
+                fontSize="14px"
+                fontWeight="500"
+                px={6}
+                h="40px"
+                borderRadius="8px"
+                _hover={{ bg: '#236096' }}
+                onClick={handleAdminPanel}
+              >
+                <HStack gap={2}>
+                  <FiSettings />
+                  <Text>Admin Panel</Text>
+                </HStack>
+              </Button>
+            )}
           </HStack>
         </HStack>
 
@@ -301,7 +334,7 @@ const Dashboard = () => {
             Counterparty Checklist
           </Heading>
 
-          <Box display="grid" gridTemplateColumns={{ base: "repeat(3, 1fr)", sm: "repeat(3, 1fr)" }} gap={{ base: 2, sm: 3 }}>
+          <Box display="grid" gridTemplateColumns={{ base: isAdmin ? "repeat(4, 1fr)" : "repeat(3, 1fr)", sm: isAdmin ? "repeat(4, 1fr)" : "repeat(3, 1fr)" }} gap={{ base: 2, sm: 3 }}>
             <Link href="/declaration" prefetch style={{ textDecoration: 'none' }}>
               <Button
                 bg="#47B65C"
@@ -361,6 +394,26 @@ const Dashboard = () => {
                 <Text textAlign="center" lineHeight="1.3">Check History</Text>
               </Button>
             </Link>
+
+            {isAdmin && (
+              <Button
+                bg="#2E7BB4"
+                color="white"
+                fontSize={{ base: "11.5px", sm: "13px", md: "14px" }}
+                fontWeight="500"
+                px={{ base: 2, sm: 3, md: 6 }}
+                h={{ base: "40px", sm: "40px", md: "40px" }}
+                w="100%"
+                borderRadius="8px"
+                _hover={{ bg: '#236096' }}
+                onClick={handleAdminPanel}
+                display="flex"
+                alignItems="center"
+                justifyContent="center"
+              >
+                <Text textAlign="center" lineHeight="1.3">Admin Panel</Text>
+              </Button>
+            )}
           </Box>
         </VStack>
 

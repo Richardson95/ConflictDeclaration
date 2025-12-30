@@ -183,7 +183,7 @@ const CounterpartiesPage = () => {
   }, [currentPage, totalPages]);
 
   return (
-    <AdminLayout>
+    <AdminLayout hideBackButton={true}>
       <Box px={{ base: 4, md: 6 }} py={6}>
         {/* Header with Year Selector */}
         <HStack justify="space-between" mb={6}>

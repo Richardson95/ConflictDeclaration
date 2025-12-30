@@ -104,7 +104,7 @@ const EmployeeDeclarationHistory = () => {
   }, [currentPage, totalPages]);
 
   return (
-    <AdminLayout>
+    <AdminLayout hideBackButton={true}>
       <Box minH="100vh" bg="#EDF5FE" px={{ base: 4, md: 6 }} py={{ base: 4, md: 5 }}>
         {/* Back Button */}
         <HStack

@@ -14,15 +14,18 @@ import {
   MenuTrigger,
   MenuContent,
   MenuItem,
+  Button as ChakraButton,
 } from '@chakra-ui/react';
 import AdminLayout from '@/lib/layout/AdminLayout';
-import { FiChevronLeft, FiChevronRight, FiChevronDown } from 'react-icons/fi';
+import { FiChevronLeft, FiChevronRight, FiChevronDown, FiArrowLeft } from 'react-icons/fi';
+import { useRouter } from 'next/navigation';
 import { useGetConflictMetricsQuery } from '@/lib/redux/services/dashboard.service';
 import { useGetCounterpartiesQuery, useGetConflictCheckHistoryDetailQuery } from '@/lib/redux/services/counterparty.service';
 import { useGetDeclarationsQuery } from '@/lib/redux/services/declaration.service';
 import { useGetUsersQuery } from '@/lib/redux/services/employee.service';
 
 const AdminPanel = () => {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<'check' | 'declaration'>('check');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(100);
@@ -36,6 +39,10 @@ const AdminPanel = () => {
   const [selectedYear, setSelectedYear] = useState<number>(currentYear);
 
   const yearOptions = [currentYear - 2, currentYear - 1, currentYear];
+
+  const handleBackToDashboard = () => {
+    router.push('/dashboard');
+  };
 
   // Fetch ALL conflict check history from API (fetch large dataset for client-side filtering)
   const { data: checkHistoryData, isLoading: isLoadingCheckHistory } = useGetConflictCheckHistoryDetailQuery({
@@ -238,10 +245,27 @@ const AdminPanel = () => {
   }, [currentPage, totalPages]);
 
   return (
-    <AdminLayout>
+    <AdminLayout hideBackButton={true}>
       <Box px={{ base: 4, md: 6 }} py={6}>
-        {/* Year Selector */}
-        <HStack justify="flex-end" mb={4}>
+        {/* Back to Dashboard and Year Selector */}
+        <HStack justify="flex-end" mb={4} gap={3}>
+          <ChakraButton
+            onClick={handleBackToDashboard}
+            bg="#2E7BB4"
+            color="white"
+            _hover={{ bg: '#236096' }}
+            fontSize="14px"
+            fontWeight="500"
+            px={4}
+            h="40px"
+            borderRadius="6px"
+            display="flex"
+            gap={2}
+          >
+            <FiArrowLeft size={18} />
+            Back to Dashboard
+          </ChakraButton>
+
           <Box position="relative">
             <MenuRoot>
               <MenuTrigger asChild>
@@ -249,7 +273,7 @@ const AdminPanel = () => {
                   cursor="pointer"
                   _hover={{ bg: 'gray.50' }}
                   px={4}
-                  py={2}
+                  h="40px"
                   borderRadius="6px"
                   transition="all 0.2s"
                   bg="white"
