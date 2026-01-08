@@ -1,1 +1,1 @@
-export const baseUrl = 'https://conflictcheck-ebd2ebacbbfdenbq.eastus-01.azurewebsites.net/api/v1/';
+export const baseUrl = 'https://infraconflictcheckapionpremise-infracredit.msappproxy.net/api/v1/';
