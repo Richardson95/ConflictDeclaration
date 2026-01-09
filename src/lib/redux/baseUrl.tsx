@@ -1,1 +1,1 @@
-export const baseUrl = 'https://infraconflictcheckapionpremise-infracredit.msappproxy.net/api/v1/';
+export const baseUrl = 'https://icgcapionpremiseconflictcheck-infracredit.msappproxy.net/api/v1/';
