@@ -449,7 +449,7 @@ const Dashboard = () => {
                   S/N
                 </Text>
               </Box>
-              <Box w="350px" pl={56}>
+              <Box w="350px" pl={28}>
                 <Text color="#2E7BB4" fontWeight="600" fontSize="13px">
                   Counterparties
                 </Text>
@@ -495,8 +495,8 @@ const Dashboard = () => {
                       {startIndex + index + 1}
                     </Text>
                   </Box>
-                  <Box w="350px" pl={56}>
-                    <Text fontSize="14px" color="#333">
+                  <Box w="350px" pl={28}>
+                    <Text fontSize="14px" color="#333" whiteSpace="nowrap">
                       {item.name}
                     </Text>
                   </Box>
@@ -629,6 +629,7 @@ const Dashboard = () => {
                 <option value={10}>10</option>
                 <option value={20}>20</option>
                 <option value={50}>50</option>
+                <option value={100}>100</option>
               </select>
               <Text fontWeight="400">of {totalRecords}</Text>
             </HStack>
@@ -740,6 +741,7 @@ const Dashboard = () => {
                 <option value={10}>10</option>
                 <option value={20}>20</option>
                 <option value={50}>50</option>
+                <option value={100}>100</option>
               </select>
               <Text fontWeight="400">out of {totalRecords}</Text>
             </HStack>
@@ -866,9 +868,12 @@ const Dashboard = () => {
           justifyContent="center"
           zIndex="1000"
           onClick={() => {
-            setShowStatement(false);
-            setConflictCheckResult(null);
-            setNotificationSent(false);
+            // Only allow closing if no conflict or if compliance has been notified
+            if (!conflictCheckResult?.hasConflict || notificationSent) {
+              setShowStatement(false);
+              setConflictCheckResult(null);
+              setNotificationSent(false);
+            }
           }}
         >
           <Box
@@ -1038,6 +1043,30 @@ const Dashboard = () => {
                 <Text fontSize="13px" color="#47B65C" textAlign="center">
                   Compliance department has been notified. You can now download the report.
                 </Text>
+              )}
+
+              {/* Close button - only shows after compliance is notified (for conflicts) or always for no conflict */}
+              {(!conflictCheckResult.hasConflict || notificationSent) && (
+                <ChakraButton
+                  size="xs"
+                  variant="outline"
+                  color="#666"
+                  borderColor="#D0D7DE"
+                  fontSize="11px"
+                  fontWeight="500"
+                  h="28px"
+                  px={4}
+                  borderRadius="4px"
+                  alignSelf="center"
+                  _hover={{ bg: '#F8F9FA', borderColor: '#999' }}
+                  onClick={() => {
+                    setShowStatement(false);
+                    setConflictCheckResult(null);
+                    setNotificationSent(false);
+                  }}
+                >
+                  Close
+                </ChakraButton>
               )}
             </VStack>
           </Box>
