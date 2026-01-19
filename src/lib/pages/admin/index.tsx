@@ -195,6 +195,30 @@ const AdminPanel = () => {
   });
 
   // Statistics - Using real API data
+  // Calculate total conflicts (count of all "yes" conflicts) from declaration data
+  const totalConflictsCount = useMemo(() => {
+    // Sum up conflictCount from all declarations
+    const fromDeclarations = allDeclarationHistory.reduce((sum: number, declaration: any) => {
+      return sum + (declaration.conflictCount || 0);
+    }, 0);
+
+    // If conflictCount is not available, count from assessments
+    if (fromDeclarations === 0 && allDeclarationHistory.length > 0) {
+      let count = 0;
+      allDeclarationHistory.forEach((declaration: any) => {
+        const assessments = declaration.asssessmentDtos || declaration.assessments || [];
+        assessments.forEach((assessment: any) => {
+          if (assessment.hasConflict === true) {
+            count++;
+          }
+        });
+      });
+      return count;
+    }
+
+    return fromDeclarations;
+  }, [allDeclarationHistory]);
+
   const stats = useMemo(() => {
     const metrics = conflictMetricsData?.data;
     return {
@@ -202,10 +226,10 @@ const AdminPanel = () => {
       completedDeclarations: metrics?.totalUsersThatHaveCompletedConflictDeclaration || 0,
       pendingDeclarations: metrics?.totalUsersThatHaveNotCompletedConflictDeclaration || 0,
       totalCounterparties: metrics?.totalNumberOfCounterParties || 0,
-      totalConflicts: metrics?.totalNumberOfConflicts || 0,
+      totalConflicts: totalConflictsCount, // Use calculated count from declaration data
       conflictedCounterparties: metrics?.totalNumberOfConflictedCounterParties || 0,
     };
-  }, [conflictMetricsData]);
+  }, [conflictMetricsData, totalConflictsCount]);
 
   // Reset pagination and filters when tab changes
   useEffect(() => {
