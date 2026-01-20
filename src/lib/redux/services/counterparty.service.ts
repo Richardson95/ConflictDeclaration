@@ -227,6 +227,18 @@ export const counterpartyApi = createApi({
       query: ({ year }) => `counterparties/stats?year=${year}`,
       providesTags: ['Counterparties'],
     }),
+
+    // Notify compliance department for a conflict check
+    notifyComplianceForConflictCheck: builder.mutation<
+      { data: any; message: string; success: boolean },
+      { declarationId: string }
+    >({
+      query: ({ declarationId }) => ({
+        url: `Declarations/notify-compliance/${declarationId}`,
+        method: 'POST',
+      }),
+      invalidatesTags: ['ConflictChecks'],
+    }),
   }),
 });
 
@@ -242,4 +254,5 @@ export const {
   useDeleteCounterpartyMutation,
   useGetCounterpartySectorsQuery,
   useGetCounterpartyStatsQuery,
+  useNotifyComplianceForConflictCheckMutation,
 } = counterpartyApi;

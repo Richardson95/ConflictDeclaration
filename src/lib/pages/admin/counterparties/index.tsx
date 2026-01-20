@@ -25,6 +25,8 @@ import { useGetCounterpartiesQuery } from '@/lib/redux/services/counterparty.ser
 import { useGetCounterpartyConflictSummaryQuery, useDownloadCounterpartyConflictSummaryMutation } from '@/lib/redux/services/dashboard.service';
 import { useGetActiveSectorsQuery } from '@/lib/redux/services/sector.service';
 import { useGetDeclarationsQuery } from '@/lib/redux/services/declaration.service';
+import { useGetCurrentUserQuery } from '@/lib/redux/services/auth.service';
+import { canViewConflictDetails } from '@/lib/constants/roles';
 
 const CounterpartiesPage = () => {
   const [currentPage, setCurrentPage] = useState(1);
@@ -36,6 +38,11 @@ const CounterpartiesPage = () => {
   const [selectedCounterparty, setSelectedCounterparty] = useState<any>(null);
   const [showStatement, setShowStatement] = useState(false);
   const [notificationSent, setNotificationSent] = useState(false);
+
+  // Get current user to check role
+  const { data: currentUserData } = useGetCurrentUserQuery();
+  const currentUser = currentUserData?.data;
+  const userCanViewDetails = canViewConflictDetails(currentUser?.role);
 
   // Year selector
   const currentYear = new Date().getFullYear();
@@ -442,19 +449,23 @@ const CounterpartiesPage = () => {
                           </Text>
                         </Box>
                         <Box w="200px" textAlign="center">
-                          <ChakraButton
-                            bg="#227CBF"
-                            color="white"
-                            fontSize="13px"
-                            fontWeight="500"
-                            px={5}
-                            h="36px"
-                            borderRadius="6px"
-                            _hover={{ bg: '#1B6AA3' }}
-                            onClick={() => handleViewDetails({ ...item, name: counterpartyName, employees: declarants, conflicts })}
-                          >
-                            View Details
-                          </ChakraButton>
+                          {userCanViewDetails ? (
+                            <ChakraButton
+                              bg="#227CBF"
+                              color="white"
+                              fontSize="13px"
+                              fontWeight="500"
+                              px={5}
+                              h="36px"
+                              borderRadius="6px"
+                              _hover={{ bg: '#1B6AA3' }}
+                              onClick={() => handleViewDetails({ ...item, name: counterpartyName, employees: declarants, conflicts })}
+                            >
+                              View Details
+                            </ChakraButton>
+                          ) : (
+                            <Text fontSize="13px" color="#999">-</Text>
+                          )}
                         </Box>
                         <Box w="100px" textAlign="center">
                           <Text fontSize="13px" color="#333">
@@ -527,19 +538,21 @@ const CounterpartiesPage = () => {
                             {conflicts}
                           </Text>
                         </HStack>
-                        <ChakraButton
-                          bg="#227CBF"
-                          color="white"
-                          fontSize="13px"
-                          fontWeight="500"
-                          w="100%"
-                          h="40px"
-                          borderRadius="6px"
-                          _hover={{ bg: '#1B6AA3' }}
-                          onClick={() => handleViewDetails({ ...item, name: counterpartyName, employees: declarants, conflicts })}
-                        >
-                          View Details
-                        </ChakraButton>
+                        {userCanViewDetails && (
+                          <ChakraButton
+                            bg="#227CBF"
+                            color="white"
+                            fontSize="13px"
+                            fontWeight="500"
+                            w="100%"
+                            h="40px"
+                            borderRadius="6px"
+                            _hover={{ bg: '#1B6AA3' }}
+                            onClick={() => handleViewDetails({ ...item, name: counterpartyName, employees: declarants, conflicts })}
+                          >
+                            View Details
+                          </ChakraButton>
+                        )}
                       </VStack>
                     </Box>
                   );

@@ -39,14 +39,18 @@ const DeclarationForm = () => {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(100);
+
   // Get current user from /Users/me endpoint
   const { data: currentUserData } = useGetCurrentUserQuery();
   const userId = currentUserData?.data?.id || '';
 
-  // Fetch counterparties from API
+  // Fetch ALL counterparties from API (needed for submission)
   const { data: counterpartiesData, isLoading: isLoadingCounterparties } = useGetCounterpartiesQuery({
     page: 1,
-    limit: 100, // Get all counterparties for the form
+    limit: 10000, // Get all counterparties for the form
   });
 
   // Submit declaration mutation
@@ -66,6 +70,51 @@ const DeclarationForm = () => {
       counterparty.name.toLowerCase().includes(searchQuery.toLowerCase())
     );
   }, [counterparties, searchQuery]);
+
+  // Pagination calculations
+  const totalRecords = filteredCounterparties.length;
+  const totalPages = Math.ceil(totalRecords / itemsPerPage);
+
+  // Reset to page 1 when search query changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
+
+  // Get paginated counterparties for display
+  const paginatedCounterparties = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filteredCounterparties.slice(startIndex, endIndex);
+  }, [filteredCounterparties, currentPage, itemsPerPage]);
+
+  // Calculate page numbers to render
+  const renderPageNumbers = useMemo(() => {
+    const pages: (number | string)[] = [];
+
+    pages.push(1);
+
+    if (totalPages >= 2) {
+      if (currentPage > 3) {
+        pages.push('...');
+      }
+
+      for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) {
+        if (!pages.includes(i)) {
+          pages.push(i);
+        }
+      }
+
+      if (currentPage < totalPages - 2) {
+        pages.push('...');
+      }
+
+      if (totalPages > 1) {
+        pages.push(totalPages);
+      }
+    }
+
+    return pages;
+  }, [currentPage, totalPages]);
 
   // Initialize all answers to "no" by default when counterparties are loaded
   useEffect(() => {
@@ -320,15 +369,18 @@ const DeclarationForm = () => {
             </Box>
           ) : (
             <VStack gap={{ base: 7, md: 3, lg: 4 }} align="stretch">
-              {filteredCounterparties.map((counterparty, index) => (
+              {paginatedCounterparties.map((counterparty, index) => {
+                // Calculate the actual index across all pages
+                const actualIndex = (currentPage - 1) * itemsPerPage + index;
+                return (
                 <Box
                   key={counterparty.id}
                   py={{ base: 6, md: 3 }}
-                  borderBottom={index < filteredCounterparties.length - 1 ? '1px solid #E8E8E8' : 'none'}
+                  borderBottom={index < paginatedCounterparties.length - 1 ? '1px solid #E8E8E8' : 'none'}
                 >
                   <VStack gap={{ base: 2, md: 2 }} align="stretch" display={{ base: 'flex', md: 'none' }}>
                     <Text fontSize={{ base: "17px", md: "13px" }} color="#333" fontWeight="500" lineHeight="1.4">
-                      {index + 1}. {counterparty.name}
+                      {actualIndex + 1}. {counterparty.name}
                     </Text>
                     <RadioGroup.Root
                       value={answers[counterparty.id] || ''}
@@ -355,7 +407,7 @@ const DeclarationForm = () => {
 
                   <HStack justify="space-between" display={{ base: 'none', md: 'flex' }}>
                     <Text fontSize="13px" color="#333" fontWeight="500">
-                      {index + 1}. {counterparty.name}
+                      {actualIndex + 1}. {counterparty.name}
                     </Text>
                     <RadioGroup.Root
                       value={answers[counterparty.id] || ''}
@@ -380,8 +432,96 @@ const DeclarationForm = () => {
                     </RadioGroup.Root>
                   </HStack>
                 </Box>
-              ))}
+              );
+              })}
             </VStack>
+          )}
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <Box mt={6}>
+              <HStack justify="space-between" align="center" flexWrap="wrap" gap={4}>
+                <HStack gap={2} fontSize="14px" color="#6C757D">
+                  <Text fontWeight="400">Showing</Text>
+                  <select
+                    value={itemsPerPage}
+                    onChange={(e) => {
+                      setItemsPerPage(Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                    style={{
+                      fontSize: '14px',
+                      color: '#212529',
+                      border: '1px solid #DEE2E6',
+                      borderRadius: '6px',
+                      padding: '4px 10px',
+                      backgroundColor: 'white',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                  <Text fontWeight="400">out of {totalRecords}</Text>
+                </HStack>
+
+                <HStack gap={2}>
+                  <Button
+                    size="sm"
+                    bg="white"
+                    color="#666"
+                    border="1px solid #D0D7DE"
+                    borderRadius="6px"
+                    minW="32px"
+                    h="32px"
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    _disabled={{ opacity: 0.4, cursor: 'not-allowed' }}
+                    _hover={{ bg: currentPage === 1 ? 'white' : '#F8F9FA' }}
+                  >
+                    &lt;
+                  </Button>
+
+                  {renderPageNumbers.map((page, idx) => (
+                    page === '...' ? (
+                      <Text key={`ellipsis-${idx}`} color="#666" px={1}>...</Text>
+                    ) : (
+                      <Button
+                        key={page}
+                        size="sm"
+                        bg={currentPage === page ? '#227CBF' : 'white'}
+                        color={currentPage === page ? 'white' : '#666'}
+                        border="1px solid #D0D7DE"
+                        borderRadius="6px"
+                        minW="32px"
+                        h="32px"
+                        onClick={() => setCurrentPage(page as number)}
+                        _hover={{ bg: currentPage === page ? '#1B6AA3' : '#F8F9FA' }}
+                      >
+                        {page}
+                      </Button>
+                    )
+                  ))}
+
+                  <Button
+                    size="sm"
+                    bg="white"
+                    color="#666"
+                    border="1px solid #D0D7DE"
+                    borderRadius="6px"
+                    minW="32px"
+                    h="32px"
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    _disabled={{ opacity: 0.4, cursor: 'not-allowed' }}
+                    _hover={{ bg: currentPage === totalPages ? 'white' : '#F8F9FA' }}
+                  >
+                    &gt;
+                  </Button>
+                </HStack>
+              </HStack>
+            </Box>
           )}
         </Box>
 

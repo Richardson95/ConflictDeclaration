@@ -16,7 +16,7 @@ import { LuHistory, LuDownload } from 'react-icons/lu';
 import { FiSettings } from 'react-icons/fi';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useGetCounterpartiesQuery, useCheckConflictMutation } from '@/lib/redux/services/counterparty.service';
+import { useGetCounterpartiesQuery, useCheckConflictMutation, useNotifyComplianceForConflictCheckMutation } from '@/lib/redux/services/counterparty.service';
 import type { ICounterparty, IConflictCheckResponse } from '@/lib/interfaces/counterparty.interfaces';
 import { useGetCurrentUserQuery } from '@/lib/redux/services/auth.service';
 import { hasAdminAccess } from '@/lib/constants/roles';
@@ -48,6 +48,9 @@ const Dashboard = () => {
   // Check conflict mutation
   const [checkConflict, { isLoading: isCheckingConflict }] = useCheckConflictMutation();
 
+  // Notify compliance mutation
+  const [notifyCompliance, { isLoading: isNotifyingCompliance }] = useNotifyComplianceForConflictCheckMutation();
+
   const handleCheckConflict = useCallback(async () => {
     if (selectedCounterparty) {
       try {
@@ -65,11 +68,28 @@ const Dashboard = () => {
     }
   }, [selectedCounterparty, checkConflict]);
 
-  const handleNotifyCompliance = useCallback(() => {
-    if (selectedCounterparty) {
-      setNotificationSent(true);
+  const handleNotifyCompliance = useCallback(async () => {
+    // Find the current user's declaration from userDeclarations array
+    const userDeclaration = conflictCheckResult?.userDeclarations?.find(
+      (decl) => decl.userId === currentUser?.id
+    );
+    const declarationId = userDeclaration?.declarationId;
+
+    if (declarationId) {
+      try {
+        await notifyCompliance({
+          declarationId: declarationId,
+        }).unwrap();
+        setNotificationSent(true);
+      } catch (error) {
+        console.error('Error notifying compliance:', error);
+        // Still set notificationSent to true to allow user to proceed
+        setNotificationSent(true);
+      }
+    } else {
+      console.error('No declaration found for current user in conflictCheckResult:', conflictCheckResult);
     }
-  }, [selectedCounterparty]);
+  }, [conflictCheckResult, currentUser, notifyCompliance]);
 
   const handleAdminPanel = useCallback(() => {
     router.push('/admin');
@@ -966,13 +986,13 @@ const Dashboard = () => {
                   fontWeight="500"
                   h="40px"
                   borderRadius="6px"
-                  cursor={conflictCheckResult.hasConflict && !notificationSent ? "pointer" : "not-allowed"}
-                  _hover={conflictCheckResult.hasConflict && !notificationSent ? { bg: '#1B6AA3' } : {}}
-                  _active={conflictCheckResult.hasConflict && !notificationSent ? { bg: '#165A8C' } : {}}
-                  disabled={!conflictCheckResult.hasConflict || notificationSent}
+                  cursor={conflictCheckResult.hasConflict && !notificationSent && !isNotifyingCompliance ? "pointer" : "not-allowed"}
+                  _hover={conflictCheckResult.hasConflict && !notificationSent && !isNotifyingCompliance ? { bg: '#1B6AA3' } : {}}
+                  _active={conflictCheckResult.hasConflict && !notificationSent && !isNotifyingCompliance ? { bg: '#165A8C' } : {}}
+                  disabled={!conflictCheckResult.hasConflict || notificationSent || isNotifyingCompliance}
                   onClick={handleNotifyCompliance}
                 >
-                  Notify Compliance
+                  {isNotifyingCompliance ? 'Notifying...' : 'Notify Compliance'}
                 </ChakraButton>
                 <ChakraButton
                   flex="1"
@@ -1004,13 +1024,13 @@ const Dashboard = () => {
                   fontWeight="500"
                   h="42px"
                   borderRadius="6px"
-                  cursor={conflictCheckResult.hasConflict && !notificationSent ? "pointer" : "not-allowed"}
-                  _hover={conflictCheckResult.hasConflict && !notificationSent ? { bg: '#1B6AA3' } : {}}
-                  _active={conflictCheckResult.hasConflict && !notificationSent ? { bg: '#165A8C' } : {}}
-                  disabled={!conflictCheckResult.hasConflict || notificationSent}
+                  cursor={conflictCheckResult.hasConflict && !notificationSent && !isNotifyingCompliance ? "pointer" : "not-allowed"}
+                  _hover={conflictCheckResult.hasConflict && !notificationSent && !isNotifyingCompliance ? { bg: '#1B6AA3' } : {}}
+                  _active={conflictCheckResult.hasConflict && !notificationSent && !isNotifyingCompliance ? { bg: '#165A8C' } : {}}
+                  disabled={!conflictCheckResult.hasConflict || notificationSent || isNotifyingCompliance}
                   onClick={handleNotifyCompliance}
                 >
-                  Notify Compliance Department
+                  {isNotifyingCompliance ? 'Notifying...' : 'Notify Compliance Department'}
                 </ChakraButton>
                 <ChakraButton
                   flex="1"

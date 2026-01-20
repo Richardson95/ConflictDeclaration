@@ -16,6 +16,9 @@ import { Button } from '@/components/ui';
 import AdminLayout from '@/lib/layout/AdminLayout';
 import { FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 import { toaster } from '@/components/ui/toaster';
+import { useRouter } from 'next/navigation';
+import { useGetCurrentUserQuery } from '@/lib/redux/services/auth.service';
+import { isITAdmin } from '@/lib/constants/roles';
 
 // Import all API hooks
 import {
@@ -57,6 +60,24 @@ import {
 } from '@/lib/redux/services/admin.service';
 
 const SettingsPage = () => {
+  const router = useRouter();
+
+  // Get current user to check role
+  const { data: currentUserData, isLoading: isLoadingUser } = useGetCurrentUserQuery();
+  const currentUser = currentUserData?.data;
+
+  // Redirect non-IT Admin users
+  useEffect(() => {
+    if (!isLoadingUser && currentUser && !isITAdmin(currentUser.role)) {
+      toaster.error({
+        title: 'Access Denied',
+        description: 'Only IT Admin can access Settings.',
+        closable: true,
+      });
+      router.push('/admin');
+    }
+  }, [currentUser, isLoadingUser, router]);
+
   const [activeTab, setActiveTab] = useState('Employees');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(200);
@@ -1131,7 +1152,7 @@ const SettingsPage = () => {
                             </Box>
                             <Box w="120px" textAlign="center">
                               <Text fontSize="13px" color="#333">
-                                {item.role === 1 ? 'Employee' : item.role === 3 ? 'Admin' : item.role === 4 ? 'IT Admin' : item.role === 5 ? 'Operations' : item.role === 6 ? 'Compliance' : 'Unknown'}
+                                {item.role === 1 ? 'Employee' : item.role === 3 ? 'Admin' : item.role === 4 ? 'IT Admin' : item.role === 5 ? 'Operations' : item.role === 6 ? 'Compliance' : item.role === 7 ? 'Head of Compliance' : 'Unknown'}
                               </Text>
                             </Box>
                             <Box w="100px" textAlign="center">
@@ -1351,7 +1372,7 @@ const SettingsPage = () => {
                               Dept: {item.department?.name || 'N/A'}
                             </Text>
                             <Text fontSize="13px" color="#666">
-                              Role: {item.role === 1 ? 'Employee' : item.role === 3 ? 'Admin' : item.role === 4 ? 'IT Admin' : item.role === 5 ? 'Operations' : item.role === 6 ? 'Compliance' : 'Unknown'}
+                              Role: {item.role === 1 ? 'Employee' : item.role === 3 ? 'Admin' : item.role === 4 ? 'IT Admin' : item.role === 5 ? 'Operations' : item.role === 6 ? 'Compliance' : item.role === 7 ? 'Head of Compliance' : 'Unknown'}
                             </Text>
                             <HStack gap={2}>
                               <Box
@@ -1628,6 +1649,7 @@ const SettingsPage = () => {
                     <option value={4}>IT Admin</option>
                     <option value={5}>Operations</option>
                     <option value={6}>Compliance</option>
+                    <option value={7}>Head of Compliance</option>
                   </select>
                 </Box>
                 <HStack gap={3} mt={4}>

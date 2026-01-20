@@ -19,7 +19,15 @@ export interface IConflictCheckRequest {
   counterpartyId: string;
 }
 
+export interface IUserDeclaration {
+  userId: string;
+  userFullName: string;
+  declarationId: string;
+}
+
 export interface IConflictCheckResponse {
+  id?: string;
+  referenceNumber?: string;
   hasConflict: boolean;
   message: string;
   checkedByFullName: string;
@@ -28,4 +36,5 @@ export interface IConflictCheckResponse {
     id: string;
     name: string;
   };
+  userDeclarations?: IUserDeclaration[];
 }
