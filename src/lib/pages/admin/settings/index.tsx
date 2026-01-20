@@ -143,8 +143,8 @@ const SettingsPage = () => {
   });
 
   const { data: sectorsData, isLoading: isLoadingSectors } = useGetSectorsQuery({
-    page: activeTab === 'Sectors' ? currentPage : 1,
-    limit: activeTab === 'Sectors' ? 100 : 10,
+    page: activeTab === 'Categories' ? currentPage : 1,
+    limit: activeTab === 'Categories' ? 100 : 10,
   });
 
   const { data: activeSectorsData } = useGetActiveSectorsQuery({
@@ -223,7 +223,7 @@ const SettingsPage = () => {
   // Check if any filters are active
   const hasActiveFilters = searchQuery || selectedDepartment || selectedStatus || selectedSector || startDate || endDate;
 
-  const tabs = ['Employees', 'Departments', 'Counterparties', 'Sectors', 'Activity log'];
+  const tabs = ['Employees', 'Departments', 'Counterparties', 'Categories', 'Activity log'];
 
   // Helper function to parse activity details into user-friendly text
   const parseActivityDetails = (details: string): string => {
@@ -368,7 +368,7 @@ const SettingsPage = () => {
       });
     } else {
       return data.filter((item: any) => {
-        if (activeTab === 'Departments' || activeTab === 'Sectors') {
+        if (activeTab === 'Departments' || activeTab === 'Categories') {
           return searchQuery === '' || item.name.toLowerCase().includes(searchQuery.toLowerCase());
         }
         return true;
@@ -637,45 +637,45 @@ const SettingsPage = () => {
     if (sectorToDelete) {
       try {
         await deleteSector(sectorToDelete).unwrap();
-        toaster.success({ title: 'Sector deleted successfully' });
+        toaster.success({ title: 'Category deleted successfully' });
         setShowDeleteSectorModal(false);
         setSectorToDelete(null);
       } catch (error: any) {
-        toaster.error({ title: 'Error', description: error?.data?.message || 'Failed to delete sector' });
+        toaster.error({ title: 'Error', description: error?.data?.message || 'Failed to delete category' });
       }
     }
   };
 
   const handleAddSector = async () => {
     if (!newSector.name) {
-      toaster.error({ title: 'Error', description: 'Please enter sector name' });
+      toaster.error({ title: 'Error', description: 'Please enter category name' });
       return;
     }
 
     try {
       await createSector(newSector).unwrap();
-      toaster.success({ title: 'Sector created successfully' });
+      toaster.success({ title: 'Category created successfully' });
       setShowAddSectorModal(false);
       setNewSector({ name: '', description: '', isActive: true });
     } catch (error: any) {
-      toaster.error({ title: 'Error', description: error?.data?.message || 'Failed to create sector' });
+      toaster.error({ title: 'Error', description: error?.data?.message || 'Failed to create category' });
     }
   };
 
   const handleUpdateSector = async () => {
     if (!sectorToEdit || !newSector.name) {
-      toaster.error({ title: 'Error', description: 'Please enter sector name' });
+      toaster.error({ title: 'Error', description: 'Please enter category name' });
       return;
     }
 
     try {
       await updateSector({ id: sectorToEdit.id, data: newSector }).unwrap();
-      toaster.success({ title: 'Sector updated successfully' });
+      toaster.success({ title: 'Category updated successfully' });
       setShowEditSectorModal(false);
       setSectorToEdit(null);
       setNewSector({ name: '', description: '', isActive: true });
     } catch (error: any) {
-      toaster.error({ title: 'Error', description: error?.data?.message || 'Failed to update sector' });
+      toaster.error({ title: 'Error', description: error?.data?.message || 'Failed to update category' });
     }
   };
 
@@ -700,9 +700,9 @@ const SettingsPage = () => {
   }, [usersData]);
 
   const sectorOptions = useMemo(() => {
-    if (!activeSectorsData?.data?.result) return [{ label: 'All Sectors', value: '' }];
+    if (!activeSectorsData?.data?.result) return [{ label: 'All Categories', value: '' }];
     return [
-      { label: 'All Sectors', value: '' },
+      { label: 'All Categories', value: '' },
       ...activeSectorsData.data.result.map((sector: any) => ({
         label: sector.name,
         value: sector.name,
@@ -865,7 +865,7 @@ const SettingsPage = () => {
                   positioning={{ sameWidth: true }}
                 >
                   <ChakraSelect.Trigger bg="white" borderColor="#D1D5DB" borderRadius="6px" height="40px">
-                    <ChakraSelect.ValueText placeholder="Sector" />
+                    <ChakraSelect.ValueText placeholder="Category" />
                   </ChakraSelect.Trigger>
                   <ChakraSelect.Positioner>
                     <ChakraSelect.Content
@@ -955,7 +955,7 @@ const SettingsPage = () => {
                   if (activeTab === 'Employees') setShowAddUserModal(true);
                   else if (activeTab === 'Departments') setShowAddDepartmentModal(true);
                   else if (activeTab === 'Counterparties') setShowAddCounterpartyModal(true);
-                  else if (activeTab === 'Sectors') setShowAddSectorModal(true);
+                  else if (activeTab === 'Categories') setShowAddSectorModal(true);
                 }}
               >
                 + Add {
@@ -1028,7 +1028,7 @@ const SettingsPage = () => {
                         </Box>
                       </>
                     )}
-                    {(activeTab === 'Departments' || activeTab === 'Sectors') && (
+                    {(activeTab === 'Departments' || activeTab === 'Categories') && (
                       <>
                         <Box flex="1">
                           <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
@@ -1056,7 +1056,7 @@ const SettingsPage = () => {
                         </Box>
                         <Box flex="1">
                           <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
-                            Sector
+                            Category
                           </Text>
                         </Box>
                         <Box w="100px" textAlign="center">
@@ -1194,7 +1194,7 @@ const SettingsPage = () => {
                           </>
                         )}
 
-                        {(activeTab === 'Departments' || activeTab === 'Sectors') && (
+                        {(activeTab === 'Departments' || activeTab === 'Categories') && (
                           <>
                             <Box flex="1">
                               <Text fontSize="13px" color="#333">
@@ -1801,7 +1801,7 @@ const SettingsPage = () => {
                 </Box>
                 <Box>
                   <Text fontSize="13px" fontWeight="500" mb={1}>
-                    Sector*
+                    Category*
                   </Text>
                   <select
                     value={newCounterparty.sectorId}
@@ -1818,7 +1818,7 @@ const SettingsPage = () => {
                     }}
                     required
                   >
-                    <option value="" disabled>Select sector</option>
+                    <option value="" disabled>Select category</option>
                     {sectorOptionsForCreate.map((option: any) => (
                       <option key={option.value} value={option.value}>
                         {option.label}
@@ -1887,7 +1887,7 @@ const SettingsPage = () => {
               onClick={(e) => e.stopPropagation()}
             >
               <Text fontSize="18px" fontWeight="600" mb={4}>
-                {showEditSectorModal ? 'Edit Sector' : 'Add New Sector'}
+                {showEditSectorModal ? 'Edit Category' : 'Add New Category'}
               </Text>
               <VStack gap={4} align="stretch">
                 <Box>
@@ -1897,7 +1897,7 @@ const SettingsPage = () => {
                   <Input
                     value={newSector.name}
                     onChange={(e) => setNewSector({ ...newSector, name: e.target.value })}
-                    placeholder="Enter sector name"
+                    placeholder="Enter category name"
                   />
                 </Box>
                 <Box>

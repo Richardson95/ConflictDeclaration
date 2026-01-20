@@ -456,7 +456,7 @@ const Dashboard = () => {
               </Box>
               <Box flex="1" pl={56}>
                 <Text color="#2E7BB4" fontWeight="600" fontSize="13px">
-                  Sector
+                  Category
                 </Text>
               </Box>
               <Box w="200px" display="flex" justifyContent="center" alignItems="center">
@@ -575,7 +575,7 @@ const Dashboard = () => {
                   </Box>
 
                   <Box>
-                    <Text fontSize={{ base: "14px", md: "11px" }} color="#333" mb={2}>Sector</Text>
+                    <Text fontSize={{ base: "14px", md: "11px" }} color="#333" mb={2}>Category</Text>
                     <Text fontSize={{ base: "17px", md: "14px" }} color="#333">{item.sectorName}</Text>
                   </Box>
                 </VStack>

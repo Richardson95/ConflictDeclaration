@@ -269,7 +269,7 @@ const CounterpartiesPage = () => {
                   borderRadius="6px"
                   height="40px"
                 >
-                  <ChakraSelect.ValueText placeholder="Sector" />
+                  <ChakraSelect.ValueText placeholder="Category" />
                   <ChakraSelect.Indicator />
                 </ChakraSelect.Trigger>
                 <ChakraSelect.Content
@@ -381,7 +381,7 @@ const CounterpartiesPage = () => {
                 </Box>
                 <Box flex="1">
                   <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
-                    Sector
+                    Category
                   </Text>
                 </Box>
                 <Box w="200px" textAlign="center">
@@ -513,7 +513,7 @@ const CounterpartiesPage = () => {
                         </HStack>
                         <HStack justify="space-between">
                           <Text fontSize="12px" fontWeight="600" color="#666">
-                            Sector:
+                            Category:
                           </Text>
                           <Text fontSize="13px" color="#333">
                             {sector}
@@ -835,7 +835,7 @@ const CounterpartiesPage = () => {
                     </Text>
                   </HStack>
                   <HStack justify="space-between">
-                    <Text fontSize="13px" color="#666">Sector:</Text>
+                    <Text fontSize="13px" color="#666">Category:</Text>
                     <Text fontSize="13px" fontWeight="600" color="#333">
                       {selectedCounterparty.sector || 'N/A'}
                     </Text>
