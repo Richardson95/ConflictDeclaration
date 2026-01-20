@@ -20,7 +20,7 @@ import DashboardLayout from '@/lib/layout/DashboardLayout';
 import leftArrow from '@/assets/icons/left-arrow-1.png';
 import { Button, toaster } from '@/components/ui';
 import { useGetCounterpartiesQuery } from '@/lib/redux/services/counterparty.service';
-import { useSubmitDeclarationMutation, useNotifyComplianceMutation } from '@/lib/redux/services/declaration.service';
+import { useSubmitDeclarationMutation } from '@/lib/redux/services/declaration.service';
 import { useGetCurrentUserQuery } from '@/lib/redux/services/auth.service';
 import { useAppDispatch } from '@/lib/redux/store';
 import { dashboardApi } from '@/lib/redux/services/dashboard.service';
@@ -37,8 +37,6 @@ const DeclarationForm = () => {
   const [showPolicyViewModal, setShowPolicyViewModal] = useState(false);
   const [isAgreed, setIsAgreed] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [showConflictModal, setShowConflictModal] = useState(false);
-  const [submittedDeclaration, setSubmittedDeclaration] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
   // Get current user from /Users/me endpoint
@@ -53,9 +51,6 @@ const DeclarationForm = () => {
 
   // Submit declaration mutation
   const [submitDeclaration, { isLoading: isSubmitting }] = useSubmitDeclarationMutation();
-
-  // Notify compliance mutation
-  const [notifyCompliance, { isLoading: isNotifying }] = useNotifyComplianceMutation();
 
   // Get counterparties list
   const counterparties: ICounterparty[] = useMemo(() => {
@@ -102,28 +97,6 @@ const DeclarationForm = () => {
     }));
   };
 
-  const handleNotifyCompliance = async () => {
-    if (!submittedDeclaration?.id) return;
-
-    try {
-      const result = await notifyCompliance({ declarationId: submittedDeclaration.id }).unwrap();
-
-      toaster.success({
-        title: 'Compliance Notified',
-        description: result.message || 'The compliance department has been notified successfully',
-      });
-
-      setShowConflictModal(false);
-      router.push('/dashboard');
-    } catch (error: any) {
-      console.error('Error notifying compliance:', error);
-      toaster.error({
-        title: 'Notification Failed',
-        description: error?.data?.message || 'Failed to notify compliance department. Please try again.',
-      });
-    }
-  };
-
   const handleSubmitDeclaration = async () => {
     if (!isAgreed) return;
 
@@ -156,17 +129,8 @@ const DeclarationForm = () => {
 
       setShowPolicyModal(false);
 
-      // Check if there's a conflict
-      const declarationData = result.data;
-      setSubmittedDeclaration(declarationData);
-
-      if (declarationData?.conflictCount > 0) {
-        // Show conflict modal if there's a conflict
-        setShowConflictModal(true);
-      } else {
-        // Show success modal if no conflict
-        setShowSuccessModal(true);
-      }
+      // Show success modal
+      setShowSuccessModal(true);
     } catch (error: any) {
       console.error('Error submitting declaration:', error);
       toaster.error({
@@ -662,107 +626,6 @@ const DeclarationForm = () => {
             >
               Continue
             </Button>
-          </Box>
-        </Box>
-      )}
-
-      {/* Conflict Modal */}
-      {showConflictModal && submittedDeclaration && (
-        <Box
-          position="fixed"
-          top="0"
-          left="0"
-          right="0"
-          bottom="0"
-          bg="rgba(0, 0, 0, 0.5)"
-          display="flex"
-          alignItems="center"
-          justifyContent="center"
-          zIndex="9999"
-          px={{ base: 4, md: 0 }}
-        >
-          <Box
-            bg="white"
-            borderRadius={{ base: '10px', md: '12px' }}
-            maxW="520px"
-            w={{ base: '100%', md: '90%' }}
-            p={{ base: 5, md: 6 }}
-            boxShadow="2xl"
-          >
-            {/* Header */}
-            <Box mb={5} textAlign="center">
-              <Text fontSize={{ base: '11px', md: '12px' }} fontWeight="500" color="#666" mb={1}>
-                ID: {submittedDeclaration.id.substring(0, 8).toUpperCase()}
-              </Text>
-              <Heading fontSize={{ base: '17px', md: '19px' }} fontWeight="600" color="#2C3E50" mb={4}>
-                Conflict of Interest Statement
-              </Heading>
-            </Box>
-
-            {/* Conflict Badge */}
-            <Box
-              bg="#FF6B6B"
-              color="white"
-              fontSize={{ base: '13px', md: '14px' }}
-              fontWeight="600"
-              py={3}
-              px={4}
-              borderRadius="8px"
-              textAlign="center"
-              mb={5}
-            >
-              A Conflict of Interest exists.
-            </Box>
-
-            {/* Details */}
-            <VStack gap={2} align="stretch" mb={5}>
-              <HStack justify="space-between">
-                <Text fontSize={{ base: '12px', md: '13px' }} color="#666">
-                  Checked by:
-                </Text>
-                <Text fontSize={{ base: '12px', md: '13px' }} fontWeight="500" color="#333">
-                  {submittedDeclaration.userName || `${currentUserData?.data?.firstName || ''} ${currentUserData?.data?.lastName || ''}`.trim() || 'User'}
-                </Text>
-              </HStack>
-              <HStack justify="space-between">
-                <Text fontSize={{ base: '12px', md: '13px' }} color="#666">
-                  Date/Time:
-                </Text>
-                <Text fontSize={{ base: '12px', md: '13px' }} fontWeight="500" color="#333">
-                  {new Date(submittedDeclaration.submittedAt).toLocaleString('en-US', {
-                    month: 'long',
-                    day: 'numeric',
-                    year: 'numeric',
-                    hour: 'numeric',
-                    minute: '2-digit',
-                    hour12: true,
-                  })}
-                </Text>
-              </HStack>
-            </VStack>
-
-            {/* Notify Button */}
-            <Button
-              bg="#2E7BB4"
-              color="white"
-              fontSize="14px"
-              fontWeight="500"
-              w="100%"
-              h="44px"
-              borderRadius="6px"
-              _hover={{ bg: '#256699' }}
-              onClick={handleNotifyCompliance}
-              loading={isNotifying}
-              disabled={isNotifying}
-              mb={3}
-            >
-              {isNotifying ? 'Notifying...' : 'Notify Compliance Department'}
-            </Button>
-
-            {/* Note */}
-            <Text fontSize={{ base: '11px', md: '12px' }} color="#FF6B6B" textAlign="center" lineHeight="1.6">
-              Note: You must notify the compliance department before downloading the certificate.
-            </Text>
           </Box>
         </Box>
       )}
