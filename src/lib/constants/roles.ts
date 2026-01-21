@@ -23,9 +23,9 @@ export const isAdmin = (role?: number): boolean => {
   return role === UserRole.Admin;
 };
 
-// Helper function to check if user can view counterparty conflict details (IT Admin or Head of Compliance)
+// Helper function to check if user can view counterparty conflict details (Head of Compliance only)
 export const canViewConflictDetails = (role?: number): boolean => {
-  return role === UserRole.ITAdmin || role === UserRole.HeadOfCompliance;
+  return role === UserRole.HeadOfCompliance;
 };
 
 // Helper function to get role name

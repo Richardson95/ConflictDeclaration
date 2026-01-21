@@ -743,7 +743,7 @@ const DeclarationForm = () => {
 
             {/* Success Message */}
             <Heading fontSize={{ base: '19px', md: '22px' }} fontWeight="600" color="#2C3E50" mb={2}>
-              Assessment Complete!
+              Assessment Completed!
             </Heading>
             <Text fontSize={{ base: '13px', md: '14px' }} color="#666" lineHeight="1.6" mb={{ base: 4, md: 5 }}>
               Thank you for completing the conflict declaration form.
