@@ -230,6 +230,18 @@ export const dashboardApi = createApi({
         };
       },
     }),
+
+    // Send broadcast email notification
+    sendBroadcastEmail: builder.mutation<
+      { data: any; message: string; success: boolean },
+      { subject: string; body: string }
+    >({
+      query: ({ subject, body }) => ({
+        url: 'Dashboard/broadcast-email',
+        method: 'POST',
+        body: { subject, body },
+      }),
+    }),
   }),
 });
 
@@ -242,4 +254,5 @@ export const {
   useGetDeclarationCompletionPercentageQuery,
   useDownloadUserDeclarationStatusMutation,
   useDownloadCounterpartyConflictSummaryMutation,
+  useSendBroadcastEmailMutation,
 } = dashboardApi;

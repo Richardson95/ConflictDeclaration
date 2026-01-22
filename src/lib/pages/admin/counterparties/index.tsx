@@ -22,7 +22,7 @@ import AdminLayout from '@/lib/layout/AdminLayout';
 import { FiChevronDown } from 'react-icons/fi';
 import { LuDownload } from 'react-icons/lu';
 import { useGetCounterpartiesQuery } from '@/lib/redux/services/counterparty.service';
-import { useGetCounterpartyConflictSummaryQuery, useDownloadCounterpartyConflictSummaryMutation } from '@/lib/redux/services/dashboard.service';
+import { useGetCounterpartyConflictSummaryQuery, useDownloadCounterpartyConflictSummaryMutation, useSendBroadcastEmailMutation } from '@/lib/redux/services/dashboard.service';
 import { useGetActiveSectorsQuery } from '@/lib/redux/services/sector.service';
 import { useGetDeclarationsQuery } from '@/lib/redux/services/declaration.service';
 import { useGetCurrentUserQuery } from '@/lib/redux/services/auth.service';
@@ -51,10 +51,22 @@ const CounterpartiesPage = () => {
 
   // Mutations
   const [downloadReport] = useDownloadCounterpartyConflictSummaryMutation();
+  const [sendBroadcastEmail] = useSendBroadcastEmailMutation();
 
-  const handleViewDetails = (counterparty: any) => {
+  const handleViewDetails = async (counterparty: any) => {
     setSelectedCounterparty(counterparty);
     setShowStatement(true);
+
+    // Send broadcast email notification
+    try {
+      const counterpartyName = counterparty.name || counterparty.counterparty || 'Unknown';
+      await sendBroadcastEmail({
+        subject: 'Conflict of Interest Review Notification',
+        body: `Hello Dear Team,<br><br>Kindly note that the Head of Compliance has reviewed the details of the employees who have a conflict with <strong>${counterpartyName}</strong> counterparty today.`,
+      });
+    } catch (error) {
+      console.error('Error sending broadcast email:', error);
+    }
   };
 
   const handleNotifyCompliance = useCallback(() => {
@@ -740,8 +752,9 @@ const CounterpartiesPage = () => {
           bottom="0"
           bg="rgba(0, 0, 0, 0.5)"
           display="flex"
-          alignItems="center"
+          alignItems="flex-start"
           justifyContent="center"
+          pt="100px"
           zIndex="1000"
           onClick={() => setShowStatement(false)}
         >
