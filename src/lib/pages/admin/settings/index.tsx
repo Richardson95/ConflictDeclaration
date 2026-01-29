@@ -14,7 +14,7 @@ import {
 } from '@chakra-ui/react';
 import { Button } from '@/components/ui';
 import AdminLayout from '@/lib/layout/AdminLayout';
-import { FiChevronLeft, FiChevronRight } from 'react-icons/fi';
+import { FiChevronLeft, FiChevronRight, FiDownload } from 'react-icons/fi';
 import { toaster } from '@/components/ui/toaster';
 import { useRouter } from 'next/navigation';
 import { useGetCurrentUserQuery } from '@/lib/redux/services/auth.service';
@@ -700,6 +700,74 @@ const SettingsPage = () => {
     }
   };
 
+  // Download Activity Log as CSV
+  const handleDownloadActivityLogCSV = () => {
+    const activityData = activityLogsData?.data?.result || [];
+
+    if (activityData.length === 0) {
+      toaster.error({ title: 'No data to download', description: 'There are no activity logs to export.' });
+      return;
+    }
+
+    // CSV headers
+    const headers = ['S/N', 'Initiator', 'Action', 'Details', 'Date/Time'];
+
+    // Convert data to CSV rows
+    const rows = activityData.map((item: any, index: number) => {
+      const initiator = item.initiator || 'N/A';
+      const action = item.action || 'N/A';
+      const details = parseActivityDetails(item.details) || '';
+      const dateTime = item.createdAt
+        ? new Date(item.createdAt).toLocaleString('en-US', {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true,
+          })
+        : 'N/A';
+
+      // Escape CSV fields that contain commas, quotes, or newlines
+      const escapeCSV = (field: string) => {
+        if (field.includes(',') || field.includes('"') || field.includes('\n')) {
+          return `"${field.replace(/"/g, '""')}"`;
+        }
+        return field;
+      };
+
+      return [
+        index + 1,
+        escapeCSV(initiator),
+        escapeCSV(action),
+        escapeCSV(details),
+        escapeCSV(dateTime),
+      ].join(',');
+    });
+
+    // Combine headers and rows
+    const csvContent = [headers.join(','), ...rows].join('\n');
+
+    // Create blob and download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+
+    // Generate filename with current date
+    const today = new Date().toISOString().split('T')[0];
+    const filename = `activity_log_${today}.csv`;
+
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    toaster.success({ title: 'Download started', description: `Exporting ${activityData.length} activity log entries.` });
+  };
+
   // Collections for filters - Extract departments from users data
   const departmentOptions = useMemo(() => {
     if (!usersData?.data?.result) return [{ label: 'All Departments', value: '' }];
@@ -985,6 +1053,25 @@ const SettingsPage = () => {
                   activeTab.slice(0, -1)
                 }
               </Button>
+            )}
+
+            {/* Download CSV Button for Activity Log */}
+            {activeTab === 'Activity log' && (
+              <ChakraButton
+                bg="#227CBF"
+                color="white"
+                fontSize="14px"
+                fontWeight="500"
+                px={6}
+                h="40px"
+                borderRadius="6px"
+                _hover={{ bg: '#1B6AA3' }}
+                onClick={handleDownloadActivityLogCSV}
+                disabled={isLoadingActivityLogs}
+              >
+                <FiDownload style={{ marginRight: '8px' }} />
+                Download CSV
+              </ChakraButton>
             )}
           </HStack>
 
