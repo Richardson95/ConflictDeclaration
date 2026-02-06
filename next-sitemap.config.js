@@ -1,6 +1,6 @@
 /** @type {import('next-sitemap').IConfig} */
 const NextSitemapConfig = {
-  siteUrl: "https://nextarter-chakra.sznm.dev",
+  siteUrl: "https://conflict-check.netlify.app",
   generateRobotsTxt: true,
 };
 

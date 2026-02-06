@@ -8,3 +8,4 @@
 [build.environment]
   NODE_VERSION="22"
   COREPACK_INTEGRITY_KEYS="0"
+  NEXT_PUBLIC_API_URL="https://icgcapionpremiseconflictcheck-infracredit.msappproxy.net/"
