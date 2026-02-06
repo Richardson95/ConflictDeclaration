@@ -14,8 +14,11 @@ import {
 } from '@chakra-ui/react';
 import { Button } from '@/components/ui';
 import AdminLayout from '@/lib/layout/AdminLayout';
-import { FiChevronLeft, FiChevronRight } from 'react-icons/fi';
+import { FiChevronLeft, FiChevronRight, FiDownload } from 'react-icons/fi';
 import { toaster } from '@/components/ui/toaster';
+import { useRouter } from 'next/navigation';
+import { useGetCurrentUserQuery } from '@/lib/redux/services/auth.service';
+import { isITAdmin } from '@/lib/constants/roles';
 
 // Import all API hooks
 import {
@@ -57,6 +60,24 @@ import {
 } from '@/lib/redux/services/admin.service';
 
 const SettingsPage = () => {
+  const router = useRouter();
+
+  // Get current user to check role
+  const { data: currentUserData, isLoading: isLoadingUser } = useGetCurrentUserQuery();
+  const currentUser = currentUserData?.data;
+
+  // Redirect non-IT Admin users
+  useEffect(() => {
+    if (!isLoadingUser && currentUser && !isITAdmin(currentUser.role)) {
+      toaster.error({
+        title: 'Access Denied',
+        description: 'Only IT Admin can access Settings.',
+        closable: true,
+      });
+      router.push('/admin');
+    }
+  }, [currentUser, isLoadingUser, router]);
+
   const [activeTab, setActiveTab] = useState('Employees');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(200);
@@ -143,8 +164,8 @@ const SettingsPage = () => {
   });
 
   const { data: sectorsData, isLoading: isLoadingSectors } = useGetSectorsQuery({
-    page: activeTab === 'Sectors' ? currentPage : 1,
-    limit: activeTab === 'Sectors' ? 100 : 10,
+    page: activeTab === 'Categories' ? currentPage : 1,
+    limit: activeTab === 'Categories' ? 100 : 10,
   });
 
   const { data: activeSectorsData } = useGetActiveSectorsQuery({
@@ -223,7 +244,7 @@ const SettingsPage = () => {
   // Check if any filters are active
   const hasActiveFilters = searchQuery || selectedDepartment || selectedStatus || selectedSector || startDate || endDate;
 
-  const tabs = ['Employees', 'Departments', 'Counterparties', 'Sectors', 'Activity log'];
+  const tabs = ['Employees', 'Departments', 'Counterparties', 'Categories', 'Activity log'];
 
   // Helper function to parse activity details into user-friendly text
   const parseActivityDetails = (details: string): string => {
@@ -368,7 +389,7 @@ const SettingsPage = () => {
       });
     } else {
       return data.filter((item: any) => {
-        if (activeTab === 'Departments' || activeTab === 'Sectors') {
+        if (activeTab === 'Departments' || activeTab === 'Categories') {
           return searchQuery === '' || item.name.toLowerCase().includes(searchQuery.toLowerCase());
         }
         return true;
@@ -637,46 +658,114 @@ const SettingsPage = () => {
     if (sectorToDelete) {
       try {
         await deleteSector(sectorToDelete).unwrap();
-        toaster.success({ title: 'Sector deleted successfully' });
+        toaster.success({ title: 'Category deleted successfully' });
         setShowDeleteSectorModal(false);
         setSectorToDelete(null);
       } catch (error: any) {
-        toaster.error({ title: 'Error', description: error?.data?.message || 'Failed to delete sector' });
+        toaster.error({ title: 'Error', description: error?.data?.message || 'Failed to delete category' });
       }
     }
   };
 
   const handleAddSector = async () => {
     if (!newSector.name) {
-      toaster.error({ title: 'Error', description: 'Please enter sector name' });
+      toaster.error({ title: 'Error', description: 'Please enter category name' });
       return;
     }
 
     try {
       await createSector(newSector).unwrap();
-      toaster.success({ title: 'Sector created successfully' });
+      toaster.success({ title: 'Category created successfully' });
       setShowAddSectorModal(false);
       setNewSector({ name: '', description: '', isActive: true });
     } catch (error: any) {
-      toaster.error({ title: 'Error', description: error?.data?.message || 'Failed to create sector' });
+      toaster.error({ title: 'Error', description: error?.data?.message || 'Failed to create category' });
     }
   };
 
   const handleUpdateSector = async () => {
     if (!sectorToEdit || !newSector.name) {
-      toaster.error({ title: 'Error', description: 'Please enter sector name' });
+      toaster.error({ title: 'Error', description: 'Please enter category name' });
       return;
     }
 
     try {
       await updateSector({ id: sectorToEdit.id, data: newSector }).unwrap();
-      toaster.success({ title: 'Sector updated successfully' });
+      toaster.success({ title: 'Category updated successfully' });
       setShowEditSectorModal(false);
       setSectorToEdit(null);
       setNewSector({ name: '', description: '', isActive: true });
     } catch (error: any) {
-      toaster.error({ title: 'Error', description: error?.data?.message || 'Failed to update sector' });
+      toaster.error({ title: 'Error', description: error?.data?.message || 'Failed to update category' });
     }
+  };
+
+  // Download Activity Log as CSV
+  const handleDownloadActivityLogCSV = () => {
+    const activityData = activityLogsData?.data?.result || [];
+
+    if (activityData.length === 0) {
+      toaster.error({ title: 'No data to download', description: 'There are no activity logs to export.' });
+      return;
+    }
+
+    // CSV headers
+    const headers = ['S/N', 'Initiator', 'Action', 'Details', 'Date/Time'];
+
+    // Convert data to CSV rows
+    const rows = activityData.map((item: any, index: number) => {
+      const initiator = item.initiator || 'N/A';
+      const action = item.action || 'N/A';
+      const details = parseActivityDetails(item.details) || '';
+      const dateTime = item.createdAt
+        ? new Date(item.createdAt).toLocaleString('en-US', {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true,
+          })
+        : 'N/A';
+
+      // Escape CSV fields that contain commas, quotes, or newlines
+      const escapeCSV = (field: string) => {
+        if (field.includes(',') || field.includes('"') || field.includes('\n')) {
+          return `"${field.replace(/"/g, '""')}"`;
+        }
+        return field;
+      };
+
+      return [
+        index + 1,
+        escapeCSV(initiator),
+        escapeCSV(action),
+        escapeCSV(details),
+        escapeCSV(dateTime),
+      ].join(',');
+    });
+
+    // Combine headers and rows
+    const csvContent = [headers.join(','), ...rows].join('\n');
+
+    // Create blob and download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+
+    // Generate filename with current date
+    const today = new Date().toISOString().split('T')[0];
+    const filename = `activity_log_${today}.csv`;
+
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    toaster.success({ title: 'Download started', description: `Exporting ${activityData.length} activity log entries.` });
   };
 
   // Collections for filters - Extract departments from users data
@@ -700,9 +789,9 @@ const SettingsPage = () => {
   }, [usersData]);
 
   const sectorOptions = useMemo(() => {
-    if (!activeSectorsData?.data?.result) return [{ label: 'All Sectors', value: '' }];
+    if (!activeSectorsData?.data?.result) return [{ label: 'All Categories', value: '' }];
     return [
-      { label: 'All Sectors', value: '' },
+      { label: 'All Categories', value: '' },
       ...activeSectorsData.data.result.map((sector: any) => ({
         label: sector.name,
         value: sector.name,
@@ -730,7 +819,7 @@ const SettingsPage = () => {
   }));
 
   return (
-    <AdminLayout>
+    <AdminLayout hideBackButton={true}>
       <Box px={{ base: 4, md: 6 }} py={6}>
         {/* Header */}
         <Text fontSize="24px" fontWeight="600" color="#2C3E50" mb={6}>
@@ -865,7 +954,7 @@ const SettingsPage = () => {
                   positioning={{ sameWidth: true }}
                 >
                   <ChakraSelect.Trigger bg="white" borderColor="#D1D5DB" borderRadius="6px" height="40px">
-                    <ChakraSelect.ValueText placeholder="Sector" />
+                    <ChakraSelect.ValueText placeholder="Category" />
                   </ChakraSelect.Trigger>
                   <ChakraSelect.Positioner>
                     <ChakraSelect.Content
@@ -955,7 +1044,7 @@ const SettingsPage = () => {
                   if (activeTab === 'Employees') setShowAddUserModal(true);
                   else if (activeTab === 'Departments') setShowAddDepartmentModal(true);
                   else if (activeTab === 'Counterparties') setShowAddCounterpartyModal(true);
-                  else if (activeTab === 'Sectors') setShowAddSectorModal(true);
+                  else if (activeTab === 'Categories') setShowAddSectorModal(true);
                 }}
               >
                 + Add {
@@ -964,6 +1053,25 @@ const SettingsPage = () => {
                   activeTab.slice(0, -1)
                 }
               </Button>
+            )}
+
+            {/* Download CSV Button for Activity Log */}
+            {activeTab === 'Activity log' && (
+              <ChakraButton
+                bg="#227CBF"
+                color="white"
+                fontSize="14px"
+                fontWeight="500"
+                px={6}
+                h="40px"
+                borderRadius="6px"
+                _hover={{ bg: '#1B6AA3' }}
+                onClick={handleDownloadActivityLogCSV}
+                disabled={isLoadingActivityLogs}
+              >
+                <FiDownload style={{ marginRight: '8px' }} />
+                Download CSV
+              </ChakraButton>
             )}
           </HStack>
 
@@ -1028,7 +1136,7 @@ const SettingsPage = () => {
                         </Box>
                       </>
                     )}
-                    {(activeTab === 'Departments' || activeTab === 'Sectors') && (
+                    {(activeTab === 'Departments' || activeTab === 'Categories') && (
                       <>
                         <Box flex="1">
                           <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
@@ -1056,7 +1164,7 @@ const SettingsPage = () => {
                         </Box>
                         <Box flex="1">
                           <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
-                            Sector
+                            Category
                           </Text>
                         </Box>
                         <Box w="100px" textAlign="center">
@@ -1131,7 +1239,7 @@ const SettingsPage = () => {
                             </Box>
                             <Box w="120px" textAlign="center">
                               <Text fontSize="13px" color="#333">
-                                {item.role === 1 ? 'Employee' : item.role === 3 ? 'Admin' : item.role === 4 ? 'IT Admin' : item.role === 5 ? 'Operations' : item.role === 6 ? 'Compliance' : 'Unknown'}
+                                {item.role === 1 ? 'Employee' : item.role === 3 ? 'Admin' : item.role === 4 ? 'IT Admin' : item.role === 5 ? 'Operations' : item.role === 6 ? 'Compliance' : item.role === 7 ? 'Head of Compliance' : 'Unknown'}
                               </Text>
                             </Box>
                             <Box w="100px" textAlign="center">
@@ -1194,7 +1302,7 @@ const SettingsPage = () => {
                           </>
                         )}
 
-                        {(activeTab === 'Departments' || activeTab === 'Sectors') && (
+                        {(activeTab === 'Departments' || activeTab === 'Categories') && (
                           <>
                             <Box flex="1">
                               <Text fontSize="13px" color="#333">
@@ -1351,7 +1459,7 @@ const SettingsPage = () => {
                               Dept: {item.department?.name || 'N/A'}
                             </Text>
                             <Text fontSize="13px" color="#666">
-                              Role: {item.role === 1 ? 'Employee' : item.role === 3 ? 'Admin' : item.role === 4 ? 'IT Admin' : item.role === 5 ? 'Operations' : item.role === 6 ? 'Compliance' : 'Unknown'}
+                              Role: {item.role === 1 ? 'Employee' : item.role === 3 ? 'Admin' : item.role === 4 ? 'IT Admin' : item.role === 5 ? 'Operations' : item.role === 6 ? 'Compliance' : item.role === 7 ? 'Head of Compliance' : 'Unknown'}
                             </Text>
                             <HStack gap={2}>
                               <Box
@@ -1628,6 +1736,7 @@ const SettingsPage = () => {
                     <option value={4}>IT Admin</option>
                     <option value={5}>Operations</option>
                     <option value={6}>Compliance</option>
+                    <option value={7}>Head of Compliance</option>
                   </select>
                 </Box>
                 <HStack gap={3} mt={4}>
@@ -1801,7 +1910,7 @@ const SettingsPage = () => {
                 </Box>
                 <Box>
                   <Text fontSize="13px" fontWeight="500" mb={1}>
-                    Sector*
+                    Category*
                   </Text>
                   <select
                     value={newCounterparty.sectorId}
@@ -1818,7 +1927,7 @@ const SettingsPage = () => {
                     }}
                     required
                   >
-                    <option value="" disabled>Select sector</option>
+                    <option value="" disabled>Select category</option>
                     {sectorOptionsForCreate.map((option: any) => (
                       <option key={option.value} value={option.value}>
                         {option.label}
@@ -1887,7 +1996,7 @@ const SettingsPage = () => {
               onClick={(e) => e.stopPropagation()}
             >
               <Text fontSize="18px" fontWeight="600" mb={4}>
-                {showEditSectorModal ? 'Edit Sector' : 'Add New Sector'}
+                {showEditSectorModal ? 'Edit Category' : 'Add New Category'}
               </Text>
               <VStack gap={4} align="stretch">
                 <Box>
@@ -1897,7 +2006,7 @@ const SettingsPage = () => {
                   <Input
                     value={newSector.name}
                     onChange={(e) => setNewSector({ ...newSector, name: e.target.value })}
-                    placeholder="Enter sector name"
+                    placeholder="Enter category name"
                   />
                 </Box>
                 <Box>

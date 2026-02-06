@@ -20,7 +20,7 @@ import DashboardLayout from '@/lib/layout/DashboardLayout';
 import leftArrow from '@/assets/icons/left-arrow-1.png';
 import { Button, toaster } from '@/components/ui';
 import { useGetCounterpartiesQuery } from '@/lib/redux/services/counterparty.service';
-import { useSubmitDeclarationMutation, useNotifyComplianceMutation } from '@/lib/redux/services/declaration.service';
+import { useSubmitDeclarationMutation } from '@/lib/redux/services/declaration.service';
 import { useGetCurrentUserQuery } from '@/lib/redux/services/auth.service';
 import { useAppDispatch } from '@/lib/redux/store';
 import { dashboardApi } from '@/lib/redux/services/dashboard.service';
@@ -37,25 +37,24 @@ const DeclarationForm = () => {
   const [showPolicyViewModal, setShowPolicyViewModal] = useState(false);
   const [isAgreed, setIsAgreed] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [showConflictModal, setShowConflictModal] = useState(false);
-  const [submittedDeclaration, setSubmittedDeclaration] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(100);
 
   // Get current user from /Users/me endpoint
   const { data: currentUserData } = useGetCurrentUserQuery();
   const userId = currentUserData?.data?.id || '';
 
-  // Fetch counterparties from API
+  // Fetch ALL counterparties from API (needed for submission)
   const { data: counterpartiesData, isLoading: isLoadingCounterparties } = useGetCounterpartiesQuery({
     page: 1,
-    limit: 100, // Get all counterparties for the form
+    limit: 10000, // Get all counterparties for the form
   });
 
   // Submit declaration mutation
   const [submitDeclaration, { isLoading: isSubmitting }] = useSubmitDeclarationMutation();
-
-  // Notify compliance mutation
-  const [notifyCompliance, { isLoading: isNotifying }] = useNotifyComplianceMutation();
 
   // Get counterparties list
   const counterparties: ICounterparty[] = useMemo(() => {
@@ -71,6 +70,51 @@ const DeclarationForm = () => {
       counterparty.name.toLowerCase().includes(searchQuery.toLowerCase())
     );
   }, [counterparties, searchQuery]);
+
+  // Pagination calculations
+  const totalRecords = filteredCounterparties.length;
+  const totalPages = Math.ceil(totalRecords / itemsPerPage);
+
+  // Reset to page 1 when search query changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
+
+  // Get paginated counterparties for display
+  const paginatedCounterparties = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filteredCounterparties.slice(startIndex, endIndex);
+  }, [filteredCounterparties, currentPage, itemsPerPage]);
+
+  // Calculate page numbers to render
+  const renderPageNumbers = useMemo(() => {
+    const pages: (number | string)[] = [];
+
+    pages.push(1);
+
+    if (totalPages >= 2) {
+      if (currentPage > 3) {
+        pages.push('...');
+      }
+
+      for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) {
+        if (!pages.includes(i)) {
+          pages.push(i);
+        }
+      }
+
+      if (currentPage < totalPages - 2) {
+        pages.push('...');
+      }
+
+      if (totalPages > 1) {
+        pages.push(totalPages);
+      }
+    }
+
+    return pages;
+  }, [currentPage, totalPages]);
 
   // Initialize all answers to "no" by default when counterparties are loaded
   useEffect(() => {
@@ -100,28 +144,6 @@ const DeclarationForm = () => {
       ...prev,
       [counterpartyId]: value,
     }));
-  };
-
-  const handleNotifyCompliance = async () => {
-    if (!submittedDeclaration?.id) return;
-
-    try {
-      const result = await notifyCompliance({ declarationId: submittedDeclaration.id }).unwrap();
-
-      toaster.success({
-        title: 'Compliance Notified',
-        description: result.message || 'The compliance department has been notified successfully',
-      });
-
-      setShowConflictModal(false);
-      router.push('/dashboard');
-    } catch (error: any) {
-      console.error('Error notifying compliance:', error);
-      toaster.error({
-        title: 'Notification Failed',
-        description: error?.data?.message || 'Failed to notify compliance department. Please try again.',
-      });
-    }
   };
 
   const handleSubmitDeclaration = async () => {
@@ -156,17 +178,8 @@ const DeclarationForm = () => {
 
       setShowPolicyModal(false);
 
-      // Check if there's a conflict
-      const declarationData = result.data;
-      setSubmittedDeclaration(declarationData);
-
-      if (declarationData?.conflictCount > 0) {
-        // Show conflict modal if there's a conflict
-        setShowConflictModal(true);
-      } else {
-        // Show success modal if no conflict
-        setShowSuccessModal(true);
-      }
+      // Show success modal
+      setShowSuccessModal(true);
     } catch (error: any) {
       console.error('Error submitting declaration:', error);
       toaster.error({
@@ -356,15 +369,18 @@ const DeclarationForm = () => {
             </Box>
           ) : (
             <VStack gap={{ base: 7, md: 3, lg: 4 }} align="stretch">
-              {filteredCounterparties.map((counterparty, index) => (
+              {paginatedCounterparties.map((counterparty, index) => {
+                // Calculate the actual index across all pages
+                const actualIndex = (currentPage - 1) * itemsPerPage + index;
+                return (
                 <Box
                   key={counterparty.id}
                   py={{ base: 6, md: 3 }}
-                  borderBottom={index < filteredCounterparties.length - 1 ? '1px solid #E8E8E8' : 'none'}
+                  borderBottom={index < paginatedCounterparties.length - 1 ? '1px solid #E8E8E8' : 'none'}
                 >
                   <VStack gap={{ base: 2, md: 2 }} align="stretch" display={{ base: 'flex', md: 'none' }}>
                     <Text fontSize={{ base: "17px", md: "13px" }} color="#333" fontWeight="500" lineHeight="1.4">
-                      {index + 1}. {counterparty.name}
+                      {actualIndex + 1}. {counterparty.name}
                     </Text>
                     <RadioGroup.Root
                       value={answers[counterparty.id] || ''}
@@ -391,7 +407,7 @@ const DeclarationForm = () => {
 
                   <HStack justify="space-between" display={{ base: 'none', md: 'flex' }}>
                     <Text fontSize="13px" color="#333" fontWeight="500">
-                      {index + 1}. {counterparty.name}
+                      {actualIndex + 1}. {counterparty.name}
                     </Text>
                     <RadioGroup.Root
                       value={answers[counterparty.id] || ''}
@@ -416,8 +432,96 @@ const DeclarationForm = () => {
                     </RadioGroup.Root>
                   </HStack>
                 </Box>
-              ))}
+              );
+              })}
             </VStack>
+          )}
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <Box mt={6}>
+              <HStack justify="space-between" align="center" flexWrap="wrap" gap={4}>
+                <HStack gap={2} fontSize="14px" color="#6C757D">
+                  <Text fontWeight="400">Showing</Text>
+                  <select
+                    value={itemsPerPage}
+                    onChange={(e) => {
+                      setItemsPerPage(Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                    style={{
+                      fontSize: '14px',
+                      color: '#212529',
+                      border: '1px solid #DEE2E6',
+                      borderRadius: '6px',
+                      padding: '4px 10px',
+                      backgroundColor: 'white',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                  <Text fontWeight="400">out of {totalRecords}</Text>
+                </HStack>
+
+                <HStack gap={2}>
+                  <Button
+                    size="sm"
+                    bg="white"
+                    color="#666"
+                    border="1px solid #D0D7DE"
+                    borderRadius="6px"
+                    minW="32px"
+                    h="32px"
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    _disabled={{ opacity: 0.4, cursor: 'not-allowed' }}
+                    _hover={{ bg: currentPage === 1 ? 'white' : '#F8F9FA' }}
+                  >
+                    &lt;
+                  </Button>
+
+                  {renderPageNumbers.map((page, idx) => (
+                    page === '...' ? (
+                      <Text key={`ellipsis-${idx}`} color="#666" px={1}>...</Text>
+                    ) : (
+                      <Button
+                        key={page}
+                        size="sm"
+                        bg={currentPage === page ? '#227CBF' : 'white'}
+                        color={currentPage === page ? 'white' : '#666'}
+                        border="1px solid #D0D7DE"
+                        borderRadius="6px"
+                        minW="32px"
+                        h="32px"
+                        onClick={() => setCurrentPage(page as number)}
+                        _hover={{ bg: currentPage === page ? '#1B6AA3' : '#F8F9FA' }}
+                      >
+                        {page}
+                      </Button>
+                    )
+                  ))}
+
+                  <Button
+                    size="sm"
+                    bg="white"
+                    color="#666"
+                    border="1px solid #D0D7DE"
+                    borderRadius="6px"
+                    minW="32px"
+                    h="32px"
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    _disabled={{ opacity: 0.4, cursor: 'not-allowed' }}
+                    _hover={{ bg: currentPage === totalPages ? 'white' : '#F8F9FA' }}
+                  >
+                    &gt;
+                  </Button>
+                </HStack>
+              </HStack>
+            </Box>
           )}
         </Box>
 
@@ -639,7 +743,7 @@ const DeclarationForm = () => {
 
             {/* Success Message */}
             <Heading fontSize={{ base: '19px', md: '22px' }} fontWeight="600" color="#2C3E50" mb={2}>
-              Assessment Complete!
+              Assessment Completed!
             </Heading>
             <Text fontSize={{ base: '13px', md: '14px' }} color="#666" lineHeight="1.6" mb={{ base: 4, md: 5 }}>
               Thank you for completing the conflict declaration form.
@@ -662,107 +766,6 @@ const DeclarationForm = () => {
             >
               Continue
             </Button>
-          </Box>
-        </Box>
-      )}
-
-      {/* Conflict Modal */}
-      {showConflictModal && submittedDeclaration && (
-        <Box
-          position="fixed"
-          top="0"
-          left="0"
-          right="0"
-          bottom="0"
-          bg="rgba(0, 0, 0, 0.5)"
-          display="flex"
-          alignItems="center"
-          justifyContent="center"
-          zIndex="9999"
-          px={{ base: 4, md: 0 }}
-        >
-          <Box
-            bg="white"
-            borderRadius={{ base: '10px', md: '12px' }}
-            maxW="520px"
-            w={{ base: '100%', md: '90%' }}
-            p={{ base: 5, md: 6 }}
-            boxShadow="2xl"
-          >
-            {/* Header */}
-            <Box mb={5} textAlign="center">
-              <Text fontSize={{ base: '11px', md: '12px' }} fontWeight="500" color="#666" mb={1}>
-                ID: {submittedDeclaration.id.substring(0, 8).toUpperCase()}
-              </Text>
-              <Heading fontSize={{ base: '17px', md: '19px' }} fontWeight="600" color="#2C3E50" mb={4}>
-                Conflict of Interest Statement
-              </Heading>
-            </Box>
-
-            {/* Conflict Badge */}
-            <Box
-              bg="#FF6B6B"
-              color="white"
-              fontSize={{ base: '13px', md: '14px' }}
-              fontWeight="600"
-              py={3}
-              px={4}
-              borderRadius="8px"
-              textAlign="center"
-              mb={5}
-            >
-              A Conflict of Interest exists.
-            </Box>
-
-            {/* Details */}
-            <VStack gap={2} align="stretch" mb={5}>
-              <HStack justify="space-between">
-                <Text fontSize={{ base: '12px', md: '13px' }} color="#666">
-                  Checked by:
-                </Text>
-                <Text fontSize={{ base: '12px', md: '13px' }} fontWeight="500" color="#333">
-                  {submittedDeclaration.userName || `${currentUserData?.data?.firstName || ''} ${currentUserData?.data?.lastName || ''}`.trim() || 'User'}
-                </Text>
-              </HStack>
-              <HStack justify="space-between">
-                <Text fontSize={{ base: '12px', md: '13px' }} color="#666">
-                  Date/Time:
-                </Text>
-                <Text fontSize={{ base: '12px', md: '13px' }} fontWeight="500" color="#333">
-                  {new Date(submittedDeclaration.submittedAt).toLocaleString('en-US', {
-                    month: 'long',
-                    day: 'numeric',
-                    year: 'numeric',
-                    hour: 'numeric',
-                    minute: '2-digit',
-                    hour12: true,
-                  })}
-                </Text>
-              </HStack>
-            </VStack>
-
-            {/* Notify Button */}
-            <Button
-              bg="#2E7BB4"
-              color="white"
-              fontSize="14px"
-              fontWeight="500"
-              w="100%"
-              h="44px"
-              borderRadius="6px"
-              _hover={{ bg: '#256699' }}
-              onClick={handleNotifyCompliance}
-              loading={isNotifying}
-              disabled={isNotifying}
-              mb={3}
-            >
-              {isNotifying ? 'Notifying...' : 'Notify Compliance Department'}
-            </Button>
-
-            {/* Note */}
-            <Text fontSize={{ base: '11px', md: '12px' }} color="#FF6B6B" textAlign="center" lineHeight="1.6">
-              Note: You must notify the compliance department before downloading the certificate.
-            </Text>
           </Box>
         </Box>
       )}

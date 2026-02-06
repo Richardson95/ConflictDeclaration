@@ -340,7 +340,7 @@ const DeclarationCheckHistory = () => {
         {/* Search */}
         <Box mb={4}>
           <Input
-            placeholder="Search counterparty or sector"
+            placeholder="Search counterparty or category"
             value={searchQuery}
             onChange={(e) => {
               setSearchQuery(e.target.value);
@@ -379,7 +379,7 @@ const DeclarationCheckHistory = () => {
               </Box>
               <Box flex="1" pl={4}>
                 <Text color="#2E7BB4" fontWeight="600" fontSize="13px">
-                  Sector
+                  Category
                 </Text>
               </Box>
               <Box w="200px" transform="translateX(-60px)">
@@ -518,7 +518,7 @@ const DeclarationCheckHistory = () => {
                       </Box>
 
                       <Box>
-                        <Text fontSize="14px" color="#333" mb={2}>Sector</Text>
+                        <Text fontSize="14px" color="#333" mb={2}>Category</Text>
                         <Text fontSize="17px" color="#333">{item.sector || 'N/A'}</Text>
                       </Box>
 

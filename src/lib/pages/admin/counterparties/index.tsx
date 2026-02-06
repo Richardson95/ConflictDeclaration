@@ -22,9 +22,11 @@ import AdminLayout from '@/lib/layout/AdminLayout';
 import { FiChevronDown } from 'react-icons/fi';
 import { LuDownload } from 'react-icons/lu';
 import { useGetCounterpartiesQuery } from '@/lib/redux/services/counterparty.service';
-import { useGetCounterpartyConflictSummaryQuery, useDownloadCounterpartyConflictSummaryMutation } from '@/lib/redux/services/dashboard.service';
+import { useGetCounterpartyConflictSummaryQuery, useDownloadCounterpartyConflictSummaryMutation, useSendBroadcastEmailMutation } from '@/lib/redux/services/dashboard.service';
 import { useGetActiveSectorsQuery } from '@/lib/redux/services/sector.service';
 import { useGetDeclarationsQuery } from '@/lib/redux/services/declaration.service';
+import { useGetCurrentUserQuery } from '@/lib/redux/services/auth.service';
+import { canViewConflictDetails } from '@/lib/constants/roles';
 
 const CounterpartiesPage = () => {
   const [currentPage, setCurrentPage] = useState(1);
@@ -37,6 +39,11 @@ const CounterpartiesPage = () => {
   const [showStatement, setShowStatement] = useState(false);
   const [notificationSent, setNotificationSent] = useState(false);
 
+  // Get current user to check role
+  const { data: currentUserData } = useGetCurrentUserQuery();
+  const currentUser = currentUserData?.data;
+  const userCanViewDetails = canViewConflictDetails(currentUser?.role);
+
   // Year selector
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState<number>(currentYear);
@@ -44,10 +51,22 @@ const CounterpartiesPage = () => {
 
   // Mutations
   const [downloadReport] = useDownloadCounterpartyConflictSummaryMutation();
+  const [sendBroadcastEmail] = useSendBroadcastEmailMutation();
 
-  const handleViewDetails = (counterparty: any) => {
+  const handleViewDetails = async (counterparty: any) => {
     setSelectedCounterparty(counterparty);
     setShowStatement(true);
+
+    // Send broadcast email notification
+    try {
+      const counterpartyName = counterparty.name || counterparty.counterparty || 'Unknown';
+      await sendBroadcastEmail({
+        subject: 'Conflict of Interest Review Notification',
+        body: `Hello Dear Team,<br><br>Kindly note that the Head of Compliance has reviewed the details of the employees who have a conflict with <strong>${counterpartyName}</strong> counterparty today.`,
+      });
+    } catch (error) {
+      console.error('Error sending broadcast email:', error);
+    }
   };
 
   const handleNotifyCompliance = useCallback(() => {
@@ -183,7 +202,7 @@ const CounterpartiesPage = () => {
   }, [currentPage, totalPages]);
 
   return (
-    <AdminLayout>
+    <AdminLayout hideBackButton={true}>
       <Box px={{ base: 4, md: 6 }} py={6}>
         {/* Header with Year Selector */}
         <HStack justify="space-between" mb={6}>
@@ -269,7 +288,7 @@ const CounterpartiesPage = () => {
                   borderRadius="6px"
                   height="40px"
                 >
-                  <ChakraSelect.ValueText placeholder="Sector" />
+                  <ChakraSelect.ValueText placeholder="Category" />
                   <ChakraSelect.Indicator />
                 </ChakraSelect.Trigger>
                 <ChakraSelect.Content
@@ -381,7 +400,7 @@ const CounterpartiesPage = () => {
                 </Box>
                 <Box flex="1">
                   <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
-                    Sector
+                    Category
                   </Text>
                 </Box>
                 <Box w="200px" textAlign="center">
@@ -442,19 +461,23 @@ const CounterpartiesPage = () => {
                           </Text>
                         </Box>
                         <Box w="200px" textAlign="center">
-                          <ChakraButton
-                            bg="#227CBF"
-                            color="white"
-                            fontSize="13px"
-                            fontWeight="500"
-                            px={5}
-                            h="36px"
-                            borderRadius="6px"
-                            _hover={{ bg: '#1B6AA3' }}
-                            onClick={() => handleViewDetails({ ...item, name: counterpartyName, employees: declarants, conflicts })}
-                          >
-                            View Details
-                          </ChakraButton>
+                          {userCanViewDetails ? (
+                            <ChakraButton
+                              bg="#227CBF"
+                              color="white"
+                              fontSize="13px"
+                              fontWeight="500"
+                              px={5}
+                              h="36px"
+                              borderRadius="6px"
+                              _hover={{ bg: '#1B6AA3' }}
+                              onClick={() => handleViewDetails({ ...item, name: counterpartyName, employees: declarants, conflicts })}
+                            >
+                              View Details
+                            </ChakraButton>
+                          ) : (
+                            <Text fontSize="13px" color="#999">-</Text>
+                          )}
                         </Box>
                         <Box w="100px" textAlign="center">
                           <Text fontSize="13px" color="#333">
@@ -513,7 +536,7 @@ const CounterpartiesPage = () => {
                         </HStack>
                         <HStack justify="space-between">
                           <Text fontSize="12px" fontWeight="600" color="#666">
-                            Sector:
+                            Category:
                           </Text>
                           <Text fontSize="13px" color="#333">
                             {sector}
@@ -527,19 +550,21 @@ const CounterpartiesPage = () => {
                             {conflicts}
                           </Text>
                         </HStack>
-                        <ChakraButton
-                          bg="#227CBF"
-                          color="white"
-                          fontSize="13px"
-                          fontWeight="500"
-                          w="100%"
-                          h="40px"
-                          borderRadius="6px"
-                          _hover={{ bg: '#1B6AA3' }}
-                          onClick={() => handleViewDetails({ ...item, name: counterpartyName, employees: declarants, conflicts })}
-                        >
-                          View Details
-                        </ChakraButton>
+                        {userCanViewDetails && (
+                          <ChakraButton
+                            bg="#227CBF"
+                            color="white"
+                            fontSize="13px"
+                            fontWeight="500"
+                            w="100%"
+                            h="40px"
+                            borderRadius="6px"
+                            _hover={{ bg: '#1B6AA3' }}
+                            onClick={() => handleViewDetails({ ...item, name: counterpartyName, employees: declarants, conflicts })}
+                          >
+                            View Details
+                          </ChakraButton>
+                        )}
                       </VStack>
                     </Box>
                   );
@@ -727,8 +752,9 @@ const CounterpartiesPage = () => {
           bottom="0"
           bg="rgba(0, 0, 0, 0.5)"
           display="flex"
-          alignItems="center"
+          alignItems="flex-start"
           justifyContent="center"
+          pt="100px"
           zIndex="1000"
           onClick={() => setShowStatement(false)}
         >
@@ -835,7 +861,7 @@ const CounterpartiesPage = () => {
                     </Text>
                   </HStack>
                   <HStack justify="space-between">
-                    <Text fontSize="13px" color="#666">Sector:</Text>
+                    <Text fontSize="13px" color="#666">Category:</Text>
                     <Text fontSize="13px" fontWeight="600" color="#333">
                       {selectedCounterparty.sector || 'N/A'}
                     </Text>

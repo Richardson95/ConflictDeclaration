@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Box,
@@ -45,10 +45,17 @@ const EmployeesPage = () => {
   const [selectedStatus, setSelectedStatus] = useState('');
   const [selectedDepartment, setSelectedDepartment] = useState('');
 
-  // Year selector
-  const currentYear = 2025;
-  const [selectedYear, setSelectedYear] = useState<number>(currentYear);
-  const yearOptions = [currentYear - 2, currentYear - 1, currentYear];
+  // Year selector - computed client-side to avoid hydration mismatch
+  const [currentYear, setCurrentYear] = useState<number>(2026);
+  const [selectedYear, setSelectedYear] = useState<number>(2026);
+  const yearOptions = useMemo(() => [currentYear - 2, currentYear - 1, currentYear], [currentYear]);
+
+  // Set actual year on client mount to avoid SSR hydration issues
+  useEffect(() => {
+    const year = new Date().getFullYear();
+    setCurrentYear(year);
+    setSelectedYear(year);
+  }, []);
 
   // Reset to page 1 when year changes
   const handleYearChange = (year: number) => {
@@ -67,8 +74,9 @@ const EmployeesPage = () => {
   // Check if any filters are active
   const hasActiveFilters = searchQuery || selectedStatus || selectedDepartment;
 
-  // Notify user mutation
-  const [notifyUser, { isLoading: isNotifying }] = useNotifyUserMutation();
+  // Notify user mutation - track which user is being notified to prevent duplicate clicks
+  const [notifyUser] = useNotifyUserMutation();
+  const [notifyingUserId, setNotifyingUserId] = useState<string | null>(null);
 
   // Download state
   const [isDownloading, setIsDownloading] = React.useState(false);
@@ -102,6 +110,10 @@ const EmployeesPage = () => {
 
   // Handle sending notification to user
   const handleNotifyUser = async (userId: string, fullName: string) => {
+    // Prevent duplicate clicks while request is in progress
+    if (notifyingUserId) return;
+
+    setNotifyingUserId(userId);
     try {
       const result = await notifyUser({ userId }).unwrap();
 
@@ -123,6 +135,8 @@ const EmployeesPage = () => {
         title: 'Message Failed to Send',
         description: `Unable to send reminder to ${fullName}. Please try again later or contact support.`,
       });
+    } finally {
+      setNotifyingUserId(null);
     }
   };
 
@@ -314,7 +328,7 @@ const EmployeesPage = () => {
   };
 
   return (
-    <AdminLayout>
+    <AdminLayout hideBackButton={true}>
       <Box id="pdf-content" px={{ base: 4, md: 6 }} py={6}>
         {/* Header */}
         <HStack justify="space-between" mb={6}>
@@ -655,17 +669,30 @@ const EmployeesPage = () => {
                           bg="white"
                           border="1px solid #E5E7EB"
                           borderRadius="8px"
-                          cursor={isNotifying ? 'not-allowed' : 'pointer'}
-                          opacity={isNotifying ? 0.6 : 1}
-                          _hover={{ bg: '#F9FAFB', borderColor: '#47B65C' }}
+                          cursor={notifyingUserId ? 'not-allowed' : 'pointer'}
+                          opacity={notifyingUserId === item.id ? 0.6 : 1}
+                          _hover={notifyingUserId ? {} : { bg: '#F9FAFB', borderColor: '#47B65C' }}
                           transition="all 0.2s"
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleNotifyUser(item.id, item.fullName);
+                            if (!notifyingUserId) {
+                              handleNotifyUser(item.id, item.fullName);
+                            }
                           }}
-                          _disabled={{ opacity: 0.5, cursor: 'not-allowed' }}
                         >
-                          <FiBell size={20} color="#47B65C" />
+                          {notifyingUserId === item.id ? (
+                            <Box
+                              w="16px"
+                              h="16px"
+                              border="2px solid #47B65C"
+                              borderTopColor="transparent"
+                              borderRadius="50%"
+                              animation="spin 1s linear infinite"
+                              css={{ '@keyframes spin': { '0%': { transform: 'rotate(0deg)' }, '100%': { transform: 'rotate(360deg)' } } }}
+                            />
+                          ) : (
+                            <FiBell size={20} color="#47B65C" />
+                          )}
                         </Box>
                       )}
                     </Box>
@@ -753,17 +780,30 @@ const EmployeesPage = () => {
                           bg="white"
                           border="1px solid #E5E7EB"
                           borderRadius="8px"
-                          cursor={isNotifying ? 'not-allowed' : 'pointer'}
-                          opacity={isNotifying ? 0.6 : 1}
-                          _hover={{ bg: '#F9FAFB', borderColor: '#47B65C' }}
+                          cursor={notifyingUserId ? 'not-allowed' : 'pointer'}
+                          opacity={notifyingUserId === item.id ? 0.6 : 1}
+                          _hover={notifyingUserId ? {} : { bg: '#F9FAFB', borderColor: '#47B65C' }}
                           transition="all 0.2s"
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleNotifyUser(item.id, item.fullName);
+                            if (!notifyingUserId) {
+                              handleNotifyUser(item.id, item.fullName);
+                            }
                           }}
-                          _disabled={{ opacity: 0.5, cursor: 'not-allowed' }}
                         >
-                          <FiBell size={20} color="#47B65C" />
+                          {notifyingUserId === item.id ? (
+                            <Box
+                              w="16px"
+                              h="16px"
+                              border="2px solid #47B65C"
+                              borderTopColor="transparent"
+                              borderRadius="50%"
+                              animation="spin 1s linear infinite"
+                              css={{ '@keyframes spin': { '0%': { transform: 'rotate(0deg)' }, '100%': { transform: 'rotate(360deg)' } } }}
+                            />
+                          ) : (
+                            <FiBell size={20} color="#47B65C" />
+                          )}
                         </Box>
                       </HStack>
                     )}

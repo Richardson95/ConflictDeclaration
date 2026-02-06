@@ -150,42 +150,8 @@ const MobileNav = () => {
         Conflict Check Management System 1.0
       </Text>
 
-      {/* Right side - Admin Panel and Profile */}
+      {/* Right side - Profile */}
       <HStack gap={{ base: '2', md: '4' }}>
-        {/* Admin Panel Button - Only visible to admins */}
-        {isAdmin && (
-          <>
-            {/* Desktop version with text */}
-            <Button
-              onClick={handleAdminPanel}
-              bg="#2E7BB4"
-              color="white"
-              _hover={{ bg: '#236096' }}
-              fontSize="14px"
-              fontWeight="500"
-              px={4}
-              h="40px"
-              display={{ base: 'none', md: 'flex' }}
-              gap={2}
-            >
-              <FiSettings size={18} />
-              Admin Panel
-            </Button>
-            {/* Mobile version - icon only */}
-            <IconButton
-              onClick={handleAdminPanel}
-              bg="#2E7BB4"
-              color="white"
-              _hover={{ bg: '#236096' }}
-              aria-label="Admin Panel"
-              size="lg"
-              display={{ base: 'flex', md: 'none' }}
-            >
-              <FiSettings size={20} />
-            </IconButton>
-          </>
-        )}
-
         {/* User Profile Dropdown */}
         <Box position="relative">
           <MenuRoot>

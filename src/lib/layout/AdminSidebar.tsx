@@ -3,6 +3,8 @@
 import { Box, VStack, HStack, Text, Image, IconButton } from '@chakra-ui/react';
 import { useRouter, usePathname } from 'next/navigation';
 import { FiGrid, FiUsers, FiUser, FiSettings } from 'react-icons/fi';
+import { useGetCurrentUserQuery } from '@/lib/redux/services/auth.service';
+import { isITAdmin } from '@/lib/constants/roles';
 
 interface SidebarItemProps {
   icon: React.ReactNode;
@@ -49,12 +51,22 @@ const AdminSidebar = ({ isCollapsed, onToggle }: AdminSidebarProps) => {
   const router = useRouter();
   const pathname = usePathname();
 
-  const menuItems = [
+  // Get current user to check role
+  const { data: currentUserData } = useGetCurrentUserQuery();
+  const currentUser = currentUserData?.data;
+  const userIsITAdmin = isITAdmin(currentUser?.role);
+
+  // Base menu items
+  const baseMenuItems = [
     { icon: <FiGrid />, label: 'Dashboard', path: '/admin' },
     { icon: <FiUsers />, label: 'Counterparties', path: '/admin/counterparties' },
     { icon: <FiUser />, label: 'Employees', path: '/admin/employees' },
-    { icon: <FiSettings />, label: 'Settings', path: '/admin/settings' },
   ];
+
+  // Only show Settings for IT Admin
+  const menuItems = userIsITAdmin
+    ? [...baseMenuItems, { icon: <FiSettings />, label: 'Settings', path: '/admin/settings' }]
+    : baseMenuItems;
 
   return (
     <Box

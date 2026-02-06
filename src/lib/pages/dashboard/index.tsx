@@ -13,11 +13,16 @@ import {
 } from '@chakra-ui/react';
 import { Button } from '@/components/ui';
 import { LuHistory, LuDownload } from 'react-icons/lu';
+import { FiSettings } from 'react-icons/fi';
 import Link from 'next/link';
-import { useGetCounterpartiesQuery, useCheckConflictMutation } from '@/lib/redux/services/counterparty.service';
+import { useRouter } from 'next/navigation';
+import { useGetCounterpartiesQuery, useCheckConflictMutation, useNotifyComplianceForConflictCheckMutation } from '@/lib/redux/services/counterparty.service';
 import type { ICounterparty, IConflictCheckResponse } from '@/lib/interfaces/counterparty.interfaces';
+import { useGetCurrentUserQuery } from '@/lib/redux/services/auth.service';
+import { hasAdminAccess } from '@/lib/constants/roles';
 
 const Dashboard = () => {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(100);
@@ -28,6 +33,11 @@ const Dashboard = () => {
   const [conflictCheckResult, setConflictCheckResult] = useState<IConflictCheckResponse | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
 
+  // Fetch current user data to check role
+  const { data: currentUserData } = useGetCurrentUserQuery();
+  const currentUser = currentUserData?.data;
+  const isAdmin = hasAdminAccess(currentUser?.role);
+
   // Fetch counterparties from API
   const { data, isLoading, error } = useGetCounterpartiesQuery({
     page: currentPage,
@@ -37,6 +47,9 @@ const Dashboard = () => {
 
   // Check conflict mutation
   const [checkConflict, { isLoading: isCheckingConflict }] = useCheckConflictMutation();
+
+  // Notify compliance mutation
+  const [notifyCompliance, { isLoading: isNotifyingCompliance }] = useNotifyComplianceForConflictCheckMutation();
 
   const handleCheckConflict = useCallback(async () => {
     if (selectedCounterparty) {
@@ -55,11 +68,32 @@ const Dashboard = () => {
     }
   }, [selectedCounterparty, checkConflict]);
 
-  const handleNotifyCompliance = useCallback(() => {
-    if (selectedCounterparty) {
-      setNotificationSent(true);
+  const handleNotifyCompliance = useCallback(async () => {
+    // Find the current user's declaration from userDeclarations array
+    const userDeclaration = conflictCheckResult?.userDeclarations?.find(
+      (decl) => decl.userId === currentUser?.id
+    );
+    const declarationId = userDeclaration?.declarationId;
+
+    if (declarationId) {
+      try {
+        await notifyCompliance({
+          declarationId: declarationId,
+        }).unwrap();
+        setNotificationSent(true);
+      } catch (error) {
+        console.error('Error notifying compliance:', error);
+        // Still set notificationSent to true to allow user to proceed
+        setNotificationSent(true);
+      }
+    } else {
+      console.error('No declaration found for current user in conflictCheckResult:', conflictCheckResult);
     }
-  }, [selectedCounterparty]);
+  }, [conflictCheckResult, currentUser, notifyCompliance]);
+
+  const handleAdminPanel = useCallback(() => {
+    router.push('/admin');
+  }, [router]);
 
   const handleDownloadReport = useCallback(async () => {
     if (!conflictCheckResult) {
@@ -292,6 +326,25 @@ const Dashboard = () => {
                 </HStack>
               </Button>
             </Link>
+
+            {isAdmin && (
+              <Button
+                bg="#2E7BB4"
+                color="white"
+                fontSize="14px"
+                fontWeight="500"
+                px={6}
+                h="40px"
+                borderRadius="8px"
+                _hover={{ bg: '#236096' }}
+                onClick={handleAdminPanel}
+              >
+                <HStack gap={2}>
+                  <FiSettings />
+                  <Text>Admin Panel</Text>
+                </HStack>
+              </Button>
+            )}
           </HStack>
         </HStack>
 
@@ -301,7 +354,7 @@ const Dashboard = () => {
             Counterparty Checklist
           </Heading>
 
-          <Box display="grid" gridTemplateColumns={{ base: "repeat(3, 1fr)", sm: "repeat(3, 1fr)" }} gap={{ base: 2, sm: 3 }}>
+          <Box display="grid" gridTemplateColumns={{ base: isAdmin ? "repeat(4, 1fr)" : "repeat(3, 1fr)", sm: isAdmin ? "repeat(4, 1fr)" : "repeat(3, 1fr)" }} gap={{ base: 2, sm: 3 }}>
             <Link href="/declaration" prefetch style={{ textDecoration: 'none' }}>
               <Button
                 bg="#47B65C"
@@ -361,6 +414,26 @@ const Dashboard = () => {
                 <Text textAlign="center" lineHeight="1.3">Check History</Text>
               </Button>
             </Link>
+
+            {isAdmin && (
+              <Button
+                bg="#2E7BB4"
+                color="white"
+                fontSize={{ base: "11.5px", sm: "13px", md: "14px" }}
+                fontWeight="500"
+                px={{ base: 2, sm: 3, md: 6 }}
+                h={{ base: "40px", sm: "40px", md: "40px" }}
+                w="100%"
+                borderRadius="8px"
+                _hover={{ bg: '#236096' }}
+                onClick={handleAdminPanel}
+                display="flex"
+                alignItems="center"
+                justifyContent="center"
+              >
+                <Text textAlign="center" lineHeight="1.3">Admin Panel</Text>
+              </Button>
+            )}
           </Box>
         </VStack>
 
@@ -396,14 +469,14 @@ const Dashboard = () => {
                   S/N
                 </Text>
               </Box>
-              <Box w="350px" pl={56}>
+              <Box w="350px" pl={28}>
                 <Text color="#2E7BB4" fontWeight="600" fontSize="13px">
                   Counterparties
                 </Text>
               </Box>
               <Box flex="1" pl={56}>
                 <Text color="#2E7BB4" fontWeight="600" fontSize="13px">
-                  Sector
+                  Category
                 </Text>
               </Box>
               <Box w="200px" display="flex" justifyContent="center" alignItems="center">
@@ -442,8 +515,8 @@ const Dashboard = () => {
                       {startIndex + index + 1}
                     </Text>
                   </Box>
-                  <Box w="350px" pl={56}>
-                    <Text fontSize="14px" color="#333">
+                  <Box w="350px" pl={28}>
+                    <Text fontSize="14px" color="#333" whiteSpace="nowrap">
                       {item.name}
                     </Text>
                   </Box>
@@ -522,7 +595,7 @@ const Dashboard = () => {
                   </Box>
 
                   <Box>
-                    <Text fontSize={{ base: "14px", md: "11px" }} color="#333" mb={2}>Sector</Text>
+                    <Text fontSize={{ base: "14px", md: "11px" }} color="#333" mb={2}>Category</Text>
                     <Text fontSize={{ base: "17px", md: "14px" }} color="#333">{item.sectorName}</Text>
                   </Box>
                 </VStack>
@@ -576,6 +649,7 @@ const Dashboard = () => {
                 <option value={10}>10</option>
                 <option value={20}>20</option>
                 <option value={50}>50</option>
+                <option value={100}>100</option>
               </select>
               <Text fontWeight="400">of {totalRecords}</Text>
             </HStack>
@@ -687,6 +761,7 @@ const Dashboard = () => {
                 <option value={10}>10</option>
                 <option value={20}>20</option>
                 <option value={50}>50</option>
+                <option value={100}>100</option>
               </select>
               <Text fontWeight="400">out of {totalRecords}</Text>
             </HStack>
@@ -813,9 +888,12 @@ const Dashboard = () => {
           justifyContent="center"
           zIndex="1000"
           onClick={() => {
-            setShowStatement(false);
-            setConflictCheckResult(null);
-            setNotificationSent(false);
+            // Only allow closing if no conflict or if compliance has been notified
+            if (!conflictCheckResult?.hasConflict || notificationSent) {
+              setShowStatement(false);
+              setConflictCheckResult(null);
+              setNotificationSent(false);
+            }
           }}
         >
           <Box
@@ -908,13 +986,13 @@ const Dashboard = () => {
                   fontWeight="500"
                   h="40px"
                   borderRadius="6px"
-                  cursor={conflictCheckResult.hasConflict && !notificationSent ? "pointer" : "not-allowed"}
-                  _hover={conflictCheckResult.hasConflict && !notificationSent ? { bg: '#1B6AA3' } : {}}
-                  _active={conflictCheckResult.hasConflict && !notificationSent ? { bg: '#165A8C' } : {}}
-                  disabled={!conflictCheckResult.hasConflict || notificationSent}
+                  cursor={conflictCheckResult.hasConflict && !notificationSent && !isNotifyingCompliance ? "pointer" : "not-allowed"}
+                  _hover={conflictCheckResult.hasConflict && !notificationSent && !isNotifyingCompliance ? { bg: '#1B6AA3' } : {}}
+                  _active={conflictCheckResult.hasConflict && !notificationSent && !isNotifyingCompliance ? { bg: '#165A8C' } : {}}
+                  disabled={!conflictCheckResult.hasConflict || notificationSent || isNotifyingCompliance}
                   onClick={handleNotifyCompliance}
                 >
-                  Notify Compliance
+                  {isNotifyingCompliance ? 'Notifying...' : 'Notify Compliance'}
                 </ChakraButton>
                 <ChakraButton
                   flex="1"
@@ -946,13 +1024,13 @@ const Dashboard = () => {
                   fontWeight="500"
                   h="42px"
                   borderRadius="6px"
-                  cursor={conflictCheckResult.hasConflict && !notificationSent ? "pointer" : "not-allowed"}
-                  _hover={conflictCheckResult.hasConflict && !notificationSent ? { bg: '#1B6AA3' } : {}}
-                  _active={conflictCheckResult.hasConflict && !notificationSent ? { bg: '#165A8C' } : {}}
-                  disabled={!conflictCheckResult.hasConflict || notificationSent}
+                  cursor={conflictCheckResult.hasConflict && !notificationSent && !isNotifyingCompliance ? "pointer" : "not-allowed"}
+                  _hover={conflictCheckResult.hasConflict && !notificationSent && !isNotifyingCompliance ? { bg: '#1B6AA3' } : {}}
+                  _active={conflictCheckResult.hasConflict && !notificationSent && !isNotifyingCompliance ? { bg: '#165A8C' } : {}}
+                  disabled={!conflictCheckResult.hasConflict || notificationSent || isNotifyingCompliance}
                   onClick={handleNotifyCompliance}
                 >
-                  Notify Compliance Department
+                  {isNotifyingCompliance ? 'Notifying...' : 'Notify Compliance Department'}
                 </ChakraButton>
                 <ChakraButton
                   flex="1"
@@ -985,6 +1063,30 @@ const Dashboard = () => {
                 <Text fontSize="13px" color="#47B65C" textAlign="center">
                   Compliance department has been notified. You can now download the report.
                 </Text>
+              )}
+
+              {/* Close button - only shows after compliance is notified (for conflicts) or always for no conflict */}
+              {(!conflictCheckResult.hasConflict || notificationSent) && (
+                <ChakraButton
+                  size="xs"
+                  variant="outline"
+                  color="#666"
+                  borderColor="#D0D7DE"
+                  fontSize="11px"
+                  fontWeight="500"
+                  h="28px"
+                  px={4}
+                  borderRadius="4px"
+                  alignSelf="center"
+                  _hover={{ bg: '#F8F9FA', borderColor: '#999' }}
+                  onClick={() => {
+                    setShowStatement(false);
+                    setConflictCheckResult(null);
+                    setNotificationSent(false);
+                  }}
+                >
+                  Close
+                </ChakraButton>
               )}
             </VStack>
           </Box>
