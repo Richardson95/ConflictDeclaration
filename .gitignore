@@ -50,3 +50,6 @@ sitemap*.xml
 
 # VS Code
 .vscode/settings.json
+
+# Local Netlify folder
+.netlify
