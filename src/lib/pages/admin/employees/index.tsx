@@ -33,12 +33,23 @@ import { useNotifyUserMutation, useGetAllUsersDeclarationStatusQuery } from '@/l
 import { toaster } from '@/components/ui/toaster';
 import { toPng } from 'html-to-image';
 import jsPDF from 'jspdf';
+import { useGetCurrentUserQuery } from '@/lib/redux/services/auth.service';
+import { isOperations } from '@/lib/constants/roles';
 
 // Register Chart.js components
 ChartJS.register(ArcElement, Tooltip, Legend);
 
 const EmployeesPage = () => {
   const router = useRouter();
+
+  // Redirect Operations users to dashboard
+  const { data: currentUserData } = useGetCurrentUserQuery();
+  const currentUser = currentUserData?.data;
+  useEffect(() => {
+    if (currentUser && isOperations(currentUser.role)) {
+      router.push('/admin');
+    }
+  }, [currentUser, router]);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(100);
   const [searchQuery, setSearchQuery] = useState('');

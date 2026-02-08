@@ -1,10 +1,11 @@
 'use client';
 
+import { useMemo } from 'react';
 import { Box, VStack, HStack, Text, Image, IconButton } from '@chakra-ui/react';
 import { useRouter, usePathname } from 'next/navigation';
 import { FiGrid, FiUsers, FiUser, FiSettings } from 'react-icons/fi';
 import { useGetCurrentUserQuery } from '@/lib/redux/services/auth.service';
-import { isITAdmin } from '@/lib/constants/roles';
+import { isITAdmin, isOperations } from '@/lib/constants/roles';
 
 interface SidebarItemProps {
   icon: React.ReactNode;
@@ -55,18 +56,28 @@ const AdminSidebar = ({ isCollapsed, onToggle }: AdminSidebarProps) => {
   const { data: currentUserData } = useGetCurrentUserQuery();
   const currentUser = currentUserData?.data;
   const userIsITAdmin = isITAdmin(currentUser?.role);
+  const userIsOperations = isOperations(currentUser?.role);
 
-  // Base menu items
-  const baseMenuItems = [
-    { icon: <FiGrid />, label: 'Dashboard', path: '/admin' },
-    { icon: <FiUsers />, label: 'Counterparties', path: '/admin/counterparties' },
-    { icon: <FiUser />, label: 'Employees', path: '/admin/employees' },
-  ];
+  // Build menu items based on role
+  const menuItems = useMemo(() => {
+    // Operations only sees Dashboard
+    if (userIsOperations) {
+      return [{ icon: <FiGrid />, label: 'Dashboard', path: '/admin' }];
+    }
 
-  // Only show Settings for IT Admin
-  const menuItems = userIsITAdmin
-    ? [...baseMenuItems, { icon: <FiSettings />, label: 'Settings', path: '/admin/settings' }]
-    : baseMenuItems;
+    const baseItems = [
+      { icon: <FiGrid />, label: 'Dashboard', path: '/admin' },
+      { icon: <FiUsers />, label: 'Counterparties', path: '/admin/counterparties' },
+      { icon: <FiUser />, label: 'Employees', path: '/admin/employees' },
+    ];
+
+    // Only show Settings for IT Admin
+    if (userIsITAdmin) {
+      baseItems.push({ icon: <FiSettings />, label: 'Settings', path: '/admin/settings' });
+    }
+
+    return baseItems;
+  }, [userIsITAdmin, userIsOperations]);
 
   return (
     <Box

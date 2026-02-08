@@ -23,9 +23,14 @@ import { useGetConflictMetricsQuery } from '@/lib/redux/services/dashboard.servi
 import { useGetCounterpartiesQuery, useGetConflictCheckHistoryDetailQuery } from '@/lib/redux/services/counterparty.service';
 import { useGetDeclarationsQuery } from '@/lib/redux/services/declaration.service';
 import { useGetUsersQuery } from '@/lib/redux/services/employee.service';
+import { useGetCurrentUserQuery } from '@/lib/redux/services/auth.service';
+import { isOperations } from '@/lib/constants/roles';
 
 const AdminPanel = () => {
   const router = useRouter();
+  const { data: currentUserData } = useGetCurrentUserQuery();
+  const currentUser = currentUserData?.data;
+  const userIsOperations = isOperations(currentUser?.role);
   const [activeTab, setActiveTab] = useState<'check' | 'declaration'>('check');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(100);
@@ -475,7 +480,8 @@ const AdminPanel = () => {
           </Box>
         </Grid>
 
-        {/* Tabs and Table Section */}
+        {/* Tabs and Table Section - hidden for Operations role */}
+        {!userIsOperations && (
         <Box bg="white" borderRadius="12px" p={6}>
           {/* Tabs */}
           <HStack gap={0} mb={6} width="100%">
@@ -994,6 +1000,7 @@ const AdminPanel = () => {
             </HStack>
           </HStack>
         </Box>
+        )}
       </Box>
     </AdminLayout>
   );

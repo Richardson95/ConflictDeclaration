@@ -10,7 +10,12 @@ export enum UserRole {
 
 // Helper function to check if user has admin access
 export const hasAdminAccess = (role?: number): boolean => {
-  return role === UserRole.Admin || role === UserRole.ITAdmin || role === UserRole.HeadOfCompliance;
+  return role === UserRole.Admin || role === UserRole.ITAdmin || role === UserRole.HeadOfCompliance || role === UserRole.Operations || role === UserRole.Compliance;
+};
+
+// Helper function to check if user has Operations role
+export const isOperations = (role?: number): boolean => {
+  return role === UserRole.Operations;
 };
 
 // Helper function to check if user is IT Admin specifically

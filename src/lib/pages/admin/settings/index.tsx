@@ -314,7 +314,7 @@ const SettingsPage = () => {
           totalPages: counterpartiesData?.data?.totalPages || 1,
           isLoading: isLoadingCounterparties,
         };
-      case 'Sectors':
+      case 'Categories':
         return {
           data: sectorsData?.data?.result || [],
           totalRecords: sectorsData?.data?.totalRecords || 0,
@@ -1050,6 +1050,7 @@ const SettingsPage = () => {
                 + Add {
                   activeTab === 'Employees' ? 'User' :
                   activeTab === 'Counterparties' ? 'Counterparty' :
+                  activeTab === 'Categories' ? 'Category' :
                   activeTab.slice(0, -1)
                 }
               </Button>
@@ -1089,7 +1090,7 @@ const SettingsPage = () => {
                 <Text fontSize="14px" color="#666" textAlign="center" maxW="500px">
                   {hasActiveFilters
                     ? `No ${activeTab.toLowerCase()} match your current filters. Try adjusting your search criteria or click "Clear Filters" to see all ${activeTab.toLowerCase()}.`
-                    : `No ${activeTab.toLowerCase()} available. ${activeTab !== 'Activity log' ? `Click "Add ${activeTab === 'Employees' ? 'User' : activeTab === 'Counterparties' ? 'Counterparty' : activeTab.slice(0, -1)}" to create one.` : ''}`}
+                    : `No ${activeTab.toLowerCase()} available. ${activeTab !== 'Activity log' ? `Click "Add ${activeTab === 'Employees' ? 'User' : activeTab === 'Counterparties' ? 'Counterparty' : activeTab === 'Categories' ? 'Category' : activeTab.slice(0, -1)}" to create one.` : ''}`}
                 </Text>
               </VStack>
             ) : (

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   Box,
   Grid,
@@ -21,28 +21,48 @@ import { Button } from '@/components/ui';
 import AdminLayout from '@/lib/layout/AdminLayout';
 import { FiChevronDown } from 'react-icons/fi';
 import { LuDownload } from 'react-icons/lu';
-import { useGetCounterpartiesQuery } from '@/lib/redux/services/counterparty.service';
+import { useGetCounterpartiesQuery, useCreateCounterpartyMutation, useUpdateCounterpartyMutation, useDeleteCounterpartyMutation } from '@/lib/redux/services/counterparty.service';
 import { useGetCounterpartyConflictSummaryQuery, useDownloadCounterpartyConflictSummaryMutation, useSendBroadcastEmailMutation } from '@/lib/redux/services/dashboard.service';
 import { useGetActiveSectorsQuery } from '@/lib/redux/services/sector.service';
 import { useGetDeclarationsQuery } from '@/lib/redux/services/declaration.service';
 import { useGetCurrentUserQuery } from '@/lib/redux/services/auth.service';
-import { canViewConflictDetails } from '@/lib/constants/roles';
+import { canViewConflictDetails, isITAdmin, isOperations, UserRole } from '@/lib/constants/roles';
+import { toaster } from '@/components/ui/toaster';
+import { useRouter } from 'next/navigation';
 
 const CounterpartiesPage = () => {
+  const router = useRouter();
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(100);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSector, setSelectedSector] = useState('');
-  const [selectedConflict, setSelectedConflict] = useState('');
+
   const [isDisclaimerOpen, setIsDisclaimerOpen] = useState(false);
   const [selectedCounterparty, setSelectedCounterparty] = useState<any>(null);
   const [showStatement, setShowStatement] = useState(false);
   const [notificationSent, setNotificationSent] = useState(false);
 
+  // Manage mode state
+  const [isManageMode, setIsManageMode] = useState(false);
+  const [showAddCounterpartyModal, setShowAddCounterpartyModal] = useState(false);
+  const [showEditCounterpartyModal, setShowEditCounterpartyModal] = useState(false);
+  const [counterpartyToEdit, setCounterpartyToEdit] = useState<any>(null);
+  const [showDeleteCounterpartyModal, setShowDeleteCounterpartyModal] = useState(false);
+  const [counterpartyToDelete, setCounterpartyToDelete] = useState<string | null>(null);
+  const [newCounterparty, setNewCounterparty] = useState({ name: '', sectorId: '' });
+
   // Get current user to check role
   const { data: currentUserData } = useGetCurrentUserQuery();
   const currentUser = currentUserData?.data;
   const userCanViewDetails = canViewConflictDetails(currentUser?.role);
+  const canManageCounterparties = isITAdmin(currentUser?.role) || canViewConflictDetails(currentUser?.role) || currentUser?.role === UserRole.Compliance;
+
+  // Redirect Operations users to dashboard
+  useEffect(() => {
+    if (currentUser && isOperations(currentUser.role)) {
+      router.push('/admin');
+    }
+  }, [currentUser, router]);
 
   // Year selector
   const currentYear = new Date().getFullYear();
@@ -52,6 +72,9 @@ const CounterpartiesPage = () => {
   // Mutations
   const [downloadReport] = useDownloadCounterpartyConflictSummaryMutation();
   const [sendBroadcastEmail] = useSendBroadcastEmailMutation();
+  const [createCounterparty, { isLoading: isCreatingCounterparty }] = useCreateCounterpartyMutation();
+  const [updateCounterparty, { isLoading: isUpdatingCounterparty }] = useUpdateCounterpartyMutation();
+  const [deleteCounterparty, { isLoading: isDeletingCounterparty }] = useDeleteCounterpartyMutation();
 
   const handleViewDetails = async (counterparty: any) => {
     setSelectedCounterparty(counterparty);
@@ -79,12 +102,12 @@ const CounterpartiesPage = () => {
   const handleClearFilters = () => {
     setSearchQuery('');
     setSelectedSector('');
-    setSelectedConflict('');
+
     setCurrentPage(1);
   };
 
   // Check if any filters are active
-  const hasActiveFilters = searchQuery || selectedSector || selectedConflict;
+  const hasActiveFilters = searchQuery || selectedSector;
 
   const handleDownloadReport = async (format: 'csv' | 'excel') => {
     try {
@@ -99,6 +122,67 @@ const CounterpartiesPage = () => {
       document.body.removeChild(a);
     } catch (error) {
       console.error('Error downloading report:', error);
+    }
+  };
+
+  // Counterparty CRUD handlers
+  const handleEditCounterparty = (counterparty: any) => {
+    setCounterpartyToEdit(counterparty);
+    setNewCounterparty({
+      name: counterparty.name,
+      sectorId: counterparty.sectorId,
+    });
+    setShowEditCounterpartyModal(true);
+  };
+
+  const handleDeleteCounterparty = (counterpartyId: string) => {
+    setCounterpartyToDelete(counterpartyId);
+    setShowDeleteCounterpartyModal(true);
+  };
+
+  const confirmDeleteCounterparty = async () => {
+    if (counterpartyToDelete) {
+      try {
+        await deleteCounterparty(counterpartyToDelete).unwrap();
+        toaster.success({ title: 'Counterparty deleted successfully' });
+        setShowDeleteCounterpartyModal(false);
+        setCounterpartyToDelete(null);
+      } catch (error: any) {
+        toaster.error({ title: 'Error', description: error?.data?.message || 'Failed to delete counterparty' });
+      }
+    }
+  };
+
+  const handleAddCounterparty = async () => {
+    if (!newCounterparty.name || !newCounterparty.sectorId) {
+      toaster.error({ title: 'Error', description: 'Please fill all required fields' });
+      return;
+    }
+
+    try {
+      await createCounterparty(newCounterparty).unwrap();
+      toaster.success({ title: 'Counterparty created successfully' });
+      setShowAddCounterpartyModal(false);
+      setNewCounterparty({ name: '', sectorId: '' });
+    } catch (error: any) {
+      toaster.error({ title: 'Error', description: error?.data?.message || 'Failed to create counterparty' });
+    }
+  };
+
+  const handleUpdateCounterparty = async () => {
+    if (!counterpartyToEdit || !newCounterparty.name || !newCounterparty.sectorId) {
+      toaster.error({ title: 'Error', description: 'Please fill all required fields' });
+      return;
+    }
+
+    try {
+      await updateCounterparty({ id: counterpartyToEdit.id, data: newCounterparty }).unwrap();
+      toaster.success({ title: 'Counterparty updated successfully' });
+      setShowEditCounterpartyModal(false);
+      setCounterpartyToEdit(null);
+      setNewCounterparty({ name: '', sectorId: '' });
+    } catch (error: any) {
+      toaster.error({ title: 'Error', description: error?.data?.message || 'Failed to update counterparty' });
     }
   };
 
@@ -128,19 +212,17 @@ const CounterpartiesPage = () => {
     }));
   }, [sectorsData]);
 
-  const conflictOptions = [
-    { label: 'Has Conflict', value: 'has' },
-    { label: 'No Conflict', value: 'none' },
-  ];
+  // Sector options for create/edit modal (uses sector id as value)
+  const sectorOptionsForCreate = useMemo(() => {
+    if (!sectorsData?.data?.result) return [];
+    return sectorsData.data.result.map((sector: any) => ({
+      label: sector.name,
+      value: sector.id,
+    }));
+  }, [sectorsData]);
 
   const sectorCollection = createListCollection({
     items: sectorOptions,
-    itemToString: (item) => item.label,
-    itemToValue: (item) => item.value,
-  });
-
-  const conflictCollection = createListCollection({
-    items: conflictOptions,
     itemToString: (item) => item.label,
     itemToValue: (item) => item.value,
   });
@@ -165,14 +247,10 @@ const CounterpartiesPage = () => {
 
       const matchesSearch = counterpartyName.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesSector = !selectedSector || sector === selectedSector;
-      const matchesConflict =
-        !selectedConflict ||
-        (selectedConflict === 'has' && conflicts > 0) ||
-        (selectedConflict === 'none' && conflicts === 0);
 
-      return matchesSearch && matchesSector && matchesConflict;
+      return matchesSearch && matchesSector;
     });
-  }, [counterparties, searchQuery, selectedSector, selectedConflict]);
+  }, [counterparties, searchQuery, selectedSector]);
 
   // Pagination - using API pagination
   const startIndex = (currentPage - 1) * itemsPerPage;
@@ -210,6 +288,22 @@ const CounterpartiesPage = () => {
             Counterparties
           </Text>
 
+          <HStack gap={3}>
+            {canManageCounterparties && (
+              <ChakraButton
+                bg={isManageMode ? '#E0E0E0' : '#227CBF'}
+                color={isManageMode ? '#333' : 'white'}
+                fontSize="13px"
+                fontWeight="500"
+                px={4}
+                h="40px"
+                borderRadius="6px"
+                _hover={{ bg: isManageMode ? '#D0D0D0' : '#1B6AA3' }}
+                onClick={() => setIsManageMode(!isManageMode)}
+              >
+                {isManageMode ? 'Done Managing' : 'Manage Counterparties'}
+              </ChakraButton>
+            )}
           <Box position="relative">
             <MenuRoot>
               <MenuTrigger asChild>
@@ -262,10 +356,30 @@ const CounterpartiesPage = () => {
               </MenuContent>
             </MenuRoot>
           </Box>
+          </HStack>
         </HStack>
 
         {/* Table Section */}
         <Box bg="white" borderRadius="12px" p={6}>
+          {/* Add Counterparty Button */}
+          {isManageMode && (
+            <HStack justify="flex-end" mb={4}>
+              <ChakraButton
+                bg="#227CBF"
+                color="white"
+                fontSize="13px"
+                fontWeight="500"
+                px={5}
+                h="40px"
+                borderRadius="6px"
+                _hover={{ bg: '#1B6AA3' }}
+                onClick={() => setShowAddCounterpartyModal(true)}
+              >
+                + Add Counterparty
+              </ChakraButton>
+            </HStack>
+          )}
+
           {/* Filters */}
           <HStack
             gap={3}
@@ -299,40 +413,6 @@ const CounterpartiesPage = () => {
                   position="absolute"
                 >
                   {sectorOptions.map((option) => (
-                    <ChakraSelect.Item key={option.value} item={option}>
-                      {option.label}
-                    </ChakraSelect.Item>
-                  ))}
-                </ChakraSelect.Content>
-              </ChakraSelect.Root>
-            </Box>
-
-            {/* Conflict Filter */}
-            <Box minW="140px" maxW="180px">
-              <ChakraSelect.Root
-                collection={conflictCollection}
-                size="sm"
-                value={[selectedConflict]}
-                onValueChange={(e) => setSelectedConflict(e.value[0])}
-              >
-                <ChakraSelect.Trigger
-                  bg="white"
-                  borderColor="#D1D5DB"
-                  _hover={{ borderColor: '#9CA3AF' }}
-                  borderRadius="6px"
-                  height="40px"
-                >
-                  <ChakraSelect.ValueText placeholder="Conflict" />
-                  <ChakraSelect.Indicator />
-                </ChakraSelect.Trigger>
-                <ChakraSelect.Content
-                  bg="white"
-                  borderRadius="8px"
-                  boxShadow="lg"
-                  zIndex={1500}
-                  position="absolute"
-                >
-                  {conflictOptions.map((option) => (
                     <ChakraSelect.Item key={option.value} item={option}>
                       {option.label}
                     </ChakraSelect.Item>
@@ -408,11 +488,13 @@ const CounterpartiesPage = () => {
                     Action
                   </Text>
                 </Box>
-                <Box w="100px" textAlign="center">
-                  <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
-                    Conflicts
-                  </Text>
-                </Box>
+                {isManageMode && (
+                  <Box w="180px" textAlign="center">
+                    <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
+                      Manage
+                    </Text>
+                  </Box>
+                )}
               </HStack>
             </Box>
 
@@ -479,11 +561,38 @@ const CounterpartiesPage = () => {
                             <Text fontSize="13px" color="#999">-</Text>
                           )}
                         </Box>
-                        <Box w="100px" textAlign="center">
-                          <Text fontSize="13px" color="#333">
-                            {conflicts}
-                          </Text>
-                        </Box>
+                        {isManageMode && (
+                          <Box w="180px" textAlign="center">
+                            <HStack justify="center" gap={2}>
+                              <ChakraButton
+                                bg="#F59E0B"
+                                color="white"
+                                fontSize="12px"
+                                fontWeight="500"
+                                px={3}
+                                h="32px"
+                                borderRadius="6px"
+                                _hover={{ bg: '#D97706' }}
+                                onClick={() => handleEditCounterparty({ id: item.id, name: counterpartyName, sectorId: item.sectorId })}
+                              >
+                                Edit
+                              </ChakraButton>
+                              <ChakraButton
+                                bg="#EF4444"
+                                color="white"
+                                fontSize="12px"
+                                fontWeight="500"
+                                px={3}
+                                h="32px"
+                                borderRadius="6px"
+                                _hover={{ bg: '#DC2626' }}
+                                onClick={() => handleDeleteCounterparty(item.id)}
+                              >
+                                Delete
+                              </ChakraButton>
+                            </HStack>
+                          </Box>
+                        )}
                       </HStack>
                     </Box>
                   );
@@ -542,14 +651,6 @@ const CounterpartiesPage = () => {
                             {sector}
                           </Text>
                         </HStack>
-                        <HStack justify="space-between">
-                          <Text fontSize="12px" fontWeight="600" color="#666">
-                            Conflicts:
-                          </Text>
-                          <Text fontSize="13px" color="#333">
-                            {conflicts}
-                          </Text>
-                        </HStack>
                         {userCanViewDetails && (
                           <ChakraButton
                             bg="#227CBF"
@@ -564,6 +665,36 @@ const CounterpartiesPage = () => {
                           >
                             View Details
                           </ChakraButton>
+                        )}
+                        {isManageMode && (
+                          <HStack gap={2}>
+                            <ChakraButton
+                              bg="#F59E0B"
+                              color="white"
+                              fontSize="13px"
+                              fontWeight="500"
+                              flex="1"
+                              h="40px"
+                              borderRadius="6px"
+                              _hover={{ bg: '#D97706' }}
+                              onClick={() => handleEditCounterparty({ id: item.id, name: counterpartyName, sectorId: item.sectorId })}
+                            >
+                              Edit
+                            </ChakraButton>
+                            <ChakraButton
+                              bg="#EF4444"
+                              color="white"
+                              fontSize="13px"
+                              fontWeight="500"
+                              flex="1"
+                              h="40px"
+                              borderRadius="6px"
+                              _hover={{ bg: '#DC2626' }}
+                              onClick={() => handleDeleteCounterparty(item.id)}
+                            >
+                              Delete
+                            </ChakraButton>
+                          </HStack>
                         )}
                       </VStack>
                     </Box>
@@ -884,6 +1015,168 @@ const CounterpartiesPage = () => {
                 Close
               </ChakraButton>
             </VStack>
+          </Box>
+        </Box>
+      )}
+
+      {/* Add/Edit Counterparty Modal */}
+      {(showAddCounterpartyModal || showEditCounterpartyModal) && (
+        <Box
+          position="fixed"
+          top="0"
+          left="0"
+          right="0"
+          bottom="0"
+          bg="rgba(0, 0, 0, 0.5)"
+          display="flex"
+          alignItems="center"
+          justifyContent="center"
+          zIndex="9999"
+          onClick={() => {
+            setShowAddCounterpartyModal(false);
+            setShowEditCounterpartyModal(false);
+            setCounterpartyToEdit(null);
+            setNewCounterparty({ name: '', sectorId: '' });
+          }}
+        >
+          <Box
+            bg="white"
+            borderRadius="12px"
+            p={6}
+            maxW="500px"
+            w="90%"
+            boxShadow="xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Text fontSize="18px" fontWeight="600" mb={4}>
+              {showEditCounterpartyModal ? 'Edit Counterparty' : 'Add New Counterparty'}
+            </Text>
+            <VStack gap={4} align="stretch">
+              <Box>
+                <Text fontSize="13px" fontWeight="500" mb={1}>
+                  Name*
+                </Text>
+                <Input
+                  value={newCounterparty.name}
+                  onChange={(e) => setNewCounterparty({ ...newCounterparty, name: e.target.value })}
+                  placeholder="Enter counterparty name"
+                />
+              </Box>
+              <Box>
+                <Text fontSize="13px" fontWeight="500" mb={1}>
+                  Category*
+                </Text>
+                <select
+                  value={newCounterparty.sectorId}
+                  onChange={(e) => setNewCounterparty({ ...newCounterparty, sectorId: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    fontSize: '14px',
+                    borderRadius: '6px',
+                    border: '1px solid #D1D5DB',
+                    backgroundColor: 'white',
+                    cursor: 'pointer',
+                    outline: 'none',
+                  }}
+                  required
+                >
+                  <option value="" disabled>Select category</option>
+                  {sectorOptionsForCreate.map((option: any) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </Box>
+              <HStack gap={3} mt={4}>
+                <Button
+                  flex="1"
+                  bg="#E0E0E0"
+                  color="#666"
+                  _hover={{ bg: '#D0D0D0' }}
+                  onClick={() => {
+                    setShowAddCounterpartyModal(false);
+                    setShowEditCounterpartyModal(false);
+                    setCounterpartyToEdit(null);
+                    setNewCounterparty({ name: '', sectorId: '' });
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  flex="1"
+                  bg="#227CBF"
+                  color="white"
+                  _hover={{ bg: '#1B6AA3' }}
+                  onClick={showEditCounterpartyModal ? handleUpdateCounterparty : handleAddCounterparty}
+                  disabled={isCreatingCounterparty || isUpdatingCounterparty}
+                >
+                  {isCreatingCounterparty || isUpdatingCounterparty ? 'Saving...' : showEditCounterpartyModal ? 'Update' : 'Create'}
+                </Button>
+              </HStack>
+            </VStack>
+          </Box>
+        </Box>
+      )}
+
+      {/* Delete Counterparty Confirmation Modal */}
+      {showDeleteCounterpartyModal && (
+        <Box
+          position="fixed"
+          top="0"
+          left="0"
+          right="0"
+          bottom="0"
+          bg="rgba(0, 0, 0, 0.5)"
+          display="flex"
+          alignItems="center"
+          justifyContent="center"
+          zIndex="9999"
+          onClick={() => {
+            setShowDeleteCounterpartyModal(false);
+            setCounterpartyToDelete(null);
+          }}
+        >
+          <Box
+            bg="white"
+            borderRadius="12px"
+            p={6}
+            maxW="400px"
+            w="90%"
+            boxShadow="xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Text fontSize="18px" fontWeight="600" mb={4}>
+              Confirm Delete
+            </Text>
+            <Text fontSize="14px" color="#666" mb={6}>
+              Are you sure you want to delete this counterparty? This action cannot be undone.
+            </Text>
+            <HStack gap={3}>
+              <Button
+                flex="1"
+                bg="#E0E0E0"
+                color="#666"
+                _hover={{ bg: '#D0D0D0' }}
+                onClick={() => {
+                  setShowDeleteCounterpartyModal(false);
+                  setCounterpartyToDelete(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                flex="1"
+                bg="#EF4444"
+                color="white"
+                _hover={{ bg: '#DC2626' }}
+                onClick={confirmDeleteCounterparty}
+                disabled={isDeletingCounterparty}
+              >
+                {isDeletingCounterparty ? 'Deleting...' : 'Delete'}
+              </Button>
+            </HStack>
           </Box>
         </Box>
       )}
