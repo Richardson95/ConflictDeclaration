@@ -65,18 +65,31 @@ const Login = () => {
           });
         }
       } catch (profileError: any) {
-        // User is not profiled in the system - remove token immediately
+        // Remove token and clear session
         Cookies.remove('token');
         instance.setActiveAccount(null);
-
-        // Also clear any MSAL cache
         await instance.clearCache();
 
-        toaster.error({
-          title: 'Access Denied',
-          description: 'User not profiled. Please contact administrator to set up your profile.',
-          closable: true,
-        });
+        const isNetworkError =
+          profileError?.status === 'FETCH_ERROR' ||
+          profileError?.error?.includes?.('TIMED_OUT') ||
+          profileError?.error?.includes?.('ERR_CONNECTION') ||
+          profileError?.error?.includes?.('Failed to fetch') ||
+          profileError?.name === 'TypeError';
+
+        if (isNetworkError) {
+          toaster.error({
+            title: 'Server Unreachable',
+            description: 'Unable to connect to the server. Please check your network connection or contact IT support.',
+            closable: true,
+          });
+        } else {
+          toaster.error({
+            title: 'Access Denied',
+            description: 'User not profiled. Please contact administrator to set up your profile.',
+            closable: true,
+          });
+        }
       }
     } catch (error) {
       // Azure AD authentication failed
