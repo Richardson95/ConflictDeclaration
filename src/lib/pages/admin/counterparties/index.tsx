@@ -26,7 +26,7 @@ import { useGetCounterpartyConflictSummaryQuery, useDownloadCounterpartyConflict
 import { useGetActiveSectorsQuery } from '@/lib/redux/services/sector.service';
 import { useGetDeclarationsQuery } from '@/lib/redux/services/declaration.service';
 import { useGetCurrentUserQuery } from '@/lib/redux/services/auth.service';
-import { canViewConflictDetails, isITAdmin, isOperations, UserRole } from '@/lib/constants/roles';
+import { canViewConflictDetails, isITAdmin, isLeadership, UserRole } from '@/lib/constants/roles';
 import { toaster } from '@/components/ui/toaster';
 import { useRouter } from 'next/navigation';
 
@@ -55,11 +55,11 @@ const CounterpartiesPage = () => {
   const { data: currentUserData } = useGetCurrentUserQuery();
   const currentUser = currentUserData?.data;
   const userCanViewDetails = canViewConflictDetails(currentUser?.role);
-  const canManageCounterparties = isITAdmin(currentUser?.role) || canViewConflictDetails(currentUser?.role) || currentUser?.role === UserRole.Compliance;
+  const canManageCounterparties = isITAdmin(currentUser?.role) || canViewConflictDetails(currentUser?.role) || currentUser?.role === UserRole.RiskAndCompliance;
 
-  // Redirect Operations users to dashboard
+  // Redirect Leadership users to dashboard
   useEffect(() => {
-    if (currentUser && isOperations(currentUser.role)) {
+    if (currentUser && isLeadership(currentUser.role)) {
       router.push('/admin');
     }
   }, [currentUser, router]);

@@ -1240,7 +1240,7 @@ const SettingsPage = () => {
                             </Box>
                             <Box w="120px" textAlign="center">
                               <Text fontSize="13px" color="#333">
-                                {item.role === 1 ? 'Employee' : item.role === 3 ? 'Admin' : item.role === 4 ? 'IT Admin' : item.role === 5 ? 'Operations' : item.role === 6 ? 'Compliance' : item.role === 7 ? 'Head of Compliance' : 'Unknown'}
+                                {item.role === 1 ? 'Employee' : item.role === 4 ? 'IT Admin' : item.role === 5 ? 'Leadership' : item.role === 6 ? 'Risk and Compliance' : item.role === 7 ? 'Head of Compliance' : 'Unknown'}
                               </Text>
                             </Box>
                             <Box w="100px" textAlign="center">
@@ -1460,7 +1460,7 @@ const SettingsPage = () => {
                               Dept: {item.department?.name || 'N/A'}
                             </Text>
                             <Text fontSize="13px" color="#666">
-                              Role: {item.role === 1 ? 'Employee' : item.role === 3 ? 'Admin' : item.role === 4 ? 'IT Admin' : item.role === 5 ? 'Operations' : item.role === 6 ? 'Compliance' : item.role === 7 ? 'Head of Compliance' : 'Unknown'}
+                              Role: {item.role === 1 ? 'Employee' : item.role === 4 ? 'IT Admin' : item.role === 5 ? 'Leadership' : item.role === 6 ? 'Risk and Compliance' : item.role === 7 ? 'Head of Compliance' : 'Unknown'}
                             </Text>
                             <HStack gap={2}>
                               <Box
@@ -1733,10 +1733,9 @@ const SettingsPage = () => {
                     required
                   >
                     <option value={1}>Employee</option>
-                    <option value={3}>Admin</option>
                     <option value={4}>IT Admin</option>
-                    <option value={5}>Operations</option>
-                    <option value={6}>Compliance</option>
+                    <option value={5}>Leadership</option>
+                    <option value={6}>Risk and Compliance</option>
                     <option value={7}>Head of Compliance</option>
                   </select>
                 </Box>

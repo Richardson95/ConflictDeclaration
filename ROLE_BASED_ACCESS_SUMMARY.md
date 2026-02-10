@@ -6,23 +6,23 @@
 public enum ERole
 {
     Employee = 1,
-    Admin = 3,
     ITAdmin = 4,
-    Operations = 5,
-    Compliance = 6
+    Leadership = 5,
+    RiskAndCompliance = 6,
+    HeadOfCompliance = 7
 }
 ```
 
 ## Admin Access Rules
 
 **Users with Admin Panel Access:**
-- **Admin (role = 3)** ✅
 - **ITAdmin (role = 4)** ✅
+- **Leadership (role = 5)** ✅
+- **Risk and Compliance (role = 6)** ✅
+- **Head of Compliance (role = 7)** ✅
 
 **Users WITHOUT Admin Panel Access:**
 - Employee (role = 1) ❌
-- Operations (role = 5) ❌
-- Compliance (role = 6) ❌
 
 ---
 
@@ -33,8 +33,8 @@ public enum ERole
 
 Created a centralized file for role management with:
 - `UserRole` enum matching backend roles
-- `hasAdminAccess(role)` - Returns true for Admin (3) or ITAdmin (4)
-- `isAdmin(role)` - Checks specifically for Admin role
+- `hasAdminAccess(role)` - Returns true for ITAdmin (4), Leadership (5), Risk and Compliance (6), or Head of Compliance (7)
+- `isLeadership(role)` - Checks specifically for Leadership role
 - `isITAdmin(role)` - Checks specifically for ITAdmin role
 - `getRoleName(role)` - Returns human-readable role name
 
@@ -115,32 +115,32 @@ Content-Type: application/json
 
 ## Access Control Flow
 
-### For Admin/ITAdmin Users (role = 3 or 4):
+### For Admin Users (role = 4, 5, 6, or 7):
 
 ```
 1. User logs in via Azure AD
 2. JWT token stored in cookies and Redux
 3. Users/me API called with JWT token
-4. Backend validates JWT and returns user data with role = 3 or 4
-5. Frontend checks: hasAdminAccess(3) → true ✅
+4. Backend validates JWT and returns user data with role = 4, 5, 6, or 7
+5. Frontend checks: hasAdminAccess(4) → true ✅
 6. "Admin Panel" button visible in dropdown
 7. User can click and access /admin routes
 8. AdminLayout validates role again on page load
 9. Access granted ✅
 ```
 
-### For Regular Users (role = 1, 5, or 6):
+### For Regular Users (role = 1):
 
 ```
 1. User logs in via Azure AD
 2. JWT token stored in cookies and Redux
 3. Users/me API called with JWT token
-4. Backend validates JWT and returns user data with role = 1, 5, or 6
+4. Backend validates JWT and returns user data with role = 1
 5. Frontend checks: hasAdminAccess(1) → false ❌
 6. "Admin Panel" button NOT visible in dropdown
 7. If user manually navigates to /admin:
    - AdminLayout calls Users/me with JWT token
-   - Backend returns role = 1, 5, or 6
+   - Backend returns role = 1
    - hasAdminAccess(1) → false ❌
    - Error toast displayed
    - Redirect to /dashboard
@@ -169,14 +169,14 @@ Content-Type: application/json
 
 ## Testing Checklist
 
-### For Admin/ITAdmin (role = 3 or 4):
+### For Admin Users (role = 4, 5, 6, 7):
 - [x] Can see "Admin Panel" button in dropdown menu
 - [x] Can click and access /admin routes
 - [x] Can view admin dashboard
-- [x] Can access all admin features
+- [x] Can access admin features based on role
 - [x] JWT token sent with all requests
 
-### For Non-Admin (role = 1, 5, 6):
+### For Non-Admin (role = 1):
 - [x] Cannot see "Admin Panel" button
 - [x] If accessing /admin directly → redirected to dashboard
 - [x] See error message: "Access Denied"
@@ -207,6 +207,6 @@ Content-Type: application/json
 - Never trust client-side role checks alone
 
 ⚠️ **Role Numbers Must Match**
-- Frontend: `Admin = 3, ITAdmin = 4`
-- Backend: `Admin = 3, ITAdmin = 4`
+- Frontend: `ITAdmin = 4, Leadership = 5, RiskAndCompliance = 6, HeadOfCompliance = 7`
+- Backend: `ITAdmin = 4, Leadership = 5, RiskAndCompliance = 6, HeadOfCompliance = 7`
 - Any mismatch will break access control

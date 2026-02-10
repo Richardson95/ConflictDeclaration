@@ -5,7 +5,7 @@ import { Box, VStack, HStack, Text, Image, IconButton } from '@chakra-ui/react';
 import { useRouter, usePathname } from 'next/navigation';
 import { FiGrid, FiUsers, FiUser, FiSettings } from 'react-icons/fi';
 import { useGetCurrentUserQuery } from '@/lib/redux/services/auth.service';
-import { isITAdmin, isOperations } from '@/lib/constants/roles';
+import { isITAdmin, isLeadership } from '@/lib/constants/roles';
 
 interface SidebarItemProps {
   icon: React.ReactNode;
@@ -56,12 +56,12 @@ const AdminSidebar = ({ isCollapsed, onToggle }: AdminSidebarProps) => {
   const { data: currentUserData } = useGetCurrentUserQuery();
   const currentUser = currentUserData?.data;
   const userIsITAdmin = isITAdmin(currentUser?.role);
-  const userIsOperations = isOperations(currentUser?.role);
+  const userIsLeadership = isLeadership(currentUser?.role);
 
   // Build menu items based on role
   const menuItems = useMemo(() => {
-    // Operations only sees Dashboard
-    if (userIsOperations) {
+    // Leadership only sees Dashboard
+    if (userIsLeadership) {
       return [{ icon: <FiGrid />, label: 'Dashboard', path: '/admin' }];
     }
 
@@ -77,7 +77,7 @@ const AdminSidebar = ({ isCollapsed, onToggle }: AdminSidebarProps) => {
     }
 
     return baseItems;
-  }, [userIsITAdmin, userIsOperations]);
+  }, [userIsITAdmin, userIsLeadership]);
 
   return (
     <Box
