@@ -813,7 +813,7 @@ const SettingsPage = () => {
     { label: 'Inactive', value: 'inactive' },
   ];
 
-  const itemsPerPageOptions = [10, 20, 50, 100].map((num) => ({
+  const itemsPerPageOptions = [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000].map((num) => ({
     label: num.toString(),
     value: num.toString(),
   }));
