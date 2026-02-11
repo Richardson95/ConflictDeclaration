@@ -3,13 +3,13 @@ export enum UserRole {
   Employee = 1,
   ITAdmin = 4,
   Leadership = 5,
-  RiskAndCompliance = 6,
-  HeadOfCompliance = 7,
+  ComplianceTeam = 6,
+  RiskAndCompliance = 7,
 }
 
 // Helper function to check if user has admin access
 export const hasAdminAccess = (role?: number): boolean => {
-  return role === UserRole.ITAdmin || role === UserRole.HeadOfCompliance || role === UserRole.Leadership || role === UserRole.RiskAndCompliance;
+  return role === UserRole.ITAdmin || role === UserRole.RiskAndCompliance || role === UserRole.Leadership || role === UserRole.ComplianceTeam;
 };
 
 // Helper function to check if user has Leadership role
@@ -22,9 +22,9 @@ export const isITAdmin = (role?: number): boolean => {
   return role === UserRole.ITAdmin;
 };
 
-// Helper function to check if user can view counterparty conflict details (Head of Compliance only)
+// Helper function to check if user can view counterparty conflict details (Risk and Compliance only)
 export const canViewConflictDetails = (role?: number): boolean => {
-  return role === UserRole.HeadOfCompliance;
+  return role === UserRole.RiskAndCompliance;
 };
 
 // Helper function to get role name
@@ -36,10 +36,10 @@ export const getRoleName = (role?: number): string => {
       return 'IT Admin';
     case UserRole.Leadership:
       return 'Leadership';
+    case UserRole.ComplianceTeam:
+      return 'Compliance Team';
     case UserRole.RiskAndCompliance:
       return 'Risk and Compliance';
-    case UserRole.HeadOfCompliance:
-      return 'Head of Compliance';
     default:
       return 'Unknown';
   }

@@ -55,7 +55,7 @@ const CounterpartiesPage = () => {
   const { data: currentUserData } = useGetCurrentUserQuery();
   const currentUser = currentUserData?.data;
   const userCanViewDetails = canViewConflictDetails(currentUser?.role);
-  const canManageCounterparties = isITAdmin(currentUser?.role) || canViewConflictDetails(currentUser?.role) || currentUser?.role === UserRole.RiskAndCompliance;
+  const canManageCounterparties = isITAdmin(currentUser?.role) || canViewConflictDetails(currentUser?.role) || currentUser?.role === UserRole.ComplianceTeam;
 
   // Redirect Leadership users to dashboard
   useEffect(() => {
@@ -85,7 +85,7 @@ const CounterpartiesPage = () => {
       const counterpartyName = counterparty.name || counterparty.counterparty || 'Unknown';
       await sendBroadcastEmail({
         subject: 'Conflict of Interest Review Notification',
-        body: `Hello Dear Team,<br><br>Kindly note that the Head of Compliance has reviewed the details of the employees who have a conflict with <strong>${counterpartyName}</strong> counterparty today.`,
+        body: `Hello Dear Team,<br><br>Kindly note that Risk and Compliance has reviewed the details of the employees who have a conflict with <strong>${counterpartyName}</strong> counterparty today.`,
       });
     } catch (error) {
       console.error('Error sending broadcast email:', error);
