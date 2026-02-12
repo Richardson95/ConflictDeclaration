@@ -30,9 +30,10 @@ import {
 } from 'chart.js';
 import { IEmployee } from '@/lib/interfaces/employee.interfaces';
 import { useNotifyUserMutation, useGetAllUsersDeclarationStatusQuery } from '@/lib/redux/services/dashboard.service';
+import { baseUrl } from '@/lib/redux/baseUrl';
+import Cookies from 'js-cookie';
 import { toaster } from '@/components/ui/toaster';
-import { toPng } from 'html-to-image';
-import jsPDF from 'jspdf';
+import { wrapInEmailTemplate } from '@/lib/utils/emailTemplate';
 import { useGetCurrentUserQuery } from '@/lib/redux/services/auth.service';
 import { isLeadership } from '@/lib/constants/roles';
 
@@ -126,7 +127,15 @@ const EmployeesPage = () => {
 
     setNotifyingUserId(userId);
     try {
-      const result = await notifyUser({ userId }).unwrap();
+      const result = await notifyUser({
+        userId,
+        subject: 'Conflict of Interest Declaration Reminder',
+        body: wrapInEmailTemplate({
+          title: 'Declaration Reminder',
+          recipientName: fullName,
+          bodyContent: `<p>This is a reminder that you have not yet completed your Conflict of Interest Declaration for the current year.</p><p>Please log in to the InfraCredit Conflict Declaration portal and submit your declaration at your earliest convenience.</p><p>If you have any questions, please contact the Risk and Compliance department.</p>`,
+        }),
+      }).unwrap();
 
       // Check if the response indicates actual success
       if (result.success === false || result.message?.includes('error') || result.message?.includes('failed')) {
@@ -273,62 +282,35 @@ const EmployeesPage = () => {
   const handleDownloadReport = async () => {
     setIsDownloading(true);
     try {
-      // Get the main content area (excluding sidebar)
-      const contentElement = document.getElementById('pdf-content');
+      const token = Cookies.get('token');
+      const response = await fetch(
+        `${baseUrl}Dashboard/download-user-declaration-status?format=csv`,
+        {
+          headers: {
+            authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
 
-      if (!contentElement) {
-        throw new Error('Content element not found');
-      }
+      if (!response.ok) throw new Error('Download failed');
 
-      // Wait for charts and all content to fully render
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      // Generate PNG from the content using html-to-image (better CSS support)
-      const dataUrl = await toPng(contentElement, {
-        quality: 1.0,
-        pixelRatio: 2,
-        backgroundColor: '#ffffff',
-      });
-
-      // Create an image to get dimensions
-      const img = new Image();
-      img.src = dataUrl;
-
-      await new Promise((resolve) => {
-        img.onload = resolve;
-      });
-
-      // Calculate PDF dimensions
-      const imgWidth = 210; // A4 width in mm
-      const pageHeight = 297; // A4 height in mm
-      const imgHeight = (img.height * imgWidth) / img.width;
-
-      // Create PDF
-      const pdf = new jsPDF('p', 'mm', 'a4');
-
-      // Add image to PDF (handle multiple pages if content is long)
-      let heightLeft = imgHeight;
-      let position = 0;
-
-      pdf.addImage(dataUrl, 'PNG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
-
-      while (heightLeft > 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(dataUrl, 'PNG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
-      }
-
-      // Download the PDF
-      pdf.save(`employee-declaration-status-${selectedYear}.pdf`);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `employee-declaration-status-${selectedYear}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
 
       toaster.success({
         title: 'Report Downloaded',
-        description: `Employee declaration status report downloaded successfully.`,
+        description: 'Employee declaration status report downloaded successfully.',
       });
     } catch (error: any) {
-      console.error('PDF Generation Error:', error);
+      console.error('CSV Download Error:', error);
       toaster.error({
         title: 'Download Failed',
         description: 'Unable to download report. Please try again later.',
@@ -340,7 +322,7 @@ const EmployeesPage = () => {
 
   return (
     <AdminLayout hideBackButton={true}>
-      <Box id="pdf-content" px={{ base: 4, md: 6 }} py={6}>
+      <Box px={{ base: 4, md: 6 }} py={6}>
         {/* Header */}
         <HStack justify="space-between" mb={6}>
           <Text fontSize="24px" fontWeight="600" color="#2C3E50">
@@ -365,7 +347,7 @@ const EmployeesPage = () => {
               disabled={isDownloading}
             >
               <LuDownload size={16} />
-              {isDownloading ? 'Generating PDF...' : 'Download Report'}
+              {isDownloading ? 'Downloading...' : 'Download Report'}
             </Button>
 
             {/* Year Selector */}

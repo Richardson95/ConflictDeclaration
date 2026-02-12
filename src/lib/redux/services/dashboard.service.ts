@@ -122,11 +122,12 @@ export const dashboardApi = createApi({
     // Notify user (admin feature)
     notifyUser: builder.mutation<
       { data: any; message: string; success: boolean },
-      { userId: string }
+      { userId: string; subject?: string; body?: string }
     >({
-      query: ({ userId }) => ({
+      query: ({ userId, subject, body }) => ({
         url: `Dashboard/notify-user/${userId}`,
         method: 'POST',
+        body: subject || body ? { subject, body } : undefined,
       }),
     }),
 

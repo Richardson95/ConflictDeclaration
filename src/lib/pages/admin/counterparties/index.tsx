@@ -29,6 +29,7 @@ import { useGetCurrentUserQuery } from '@/lib/redux/services/auth.service';
 import { canViewConflictDetails, isITAdmin, isLeadership, UserRole } from '@/lib/constants/roles';
 import { toaster } from '@/components/ui/toaster';
 import { useRouter } from 'next/navigation';
+import { wrapInEmailTemplate } from '@/lib/utils/emailTemplate';
 
 const CounterpartiesPage = () => {
   const router = useRouter();
@@ -85,7 +86,10 @@ const CounterpartiesPage = () => {
       const counterpartyName = counterparty.name || counterparty.counterparty || 'Unknown';
       await sendBroadcastEmail({
         subject: 'Conflict of Interest Review Notification',
-        body: `Hello Dear Team,<br><br>Kindly note that Risk and Compliance has reviewed the details of the employees who have a conflict with <strong>${counterpartyName}</strong> counterparty today.`,
+        body: wrapInEmailTemplate({
+          title: 'Conflict of Interest Review Notification',
+          bodyContent: `<p>Hello Dear Team,</p><p>Kindly note that Risk and Compliance has reviewed the details of the employees who have a conflict with <strong>${counterpartyName}</strong> counterparty today.</p>`,
+        }),
       });
     } catch (error) {
       console.error('Error sending broadcast email:', error);

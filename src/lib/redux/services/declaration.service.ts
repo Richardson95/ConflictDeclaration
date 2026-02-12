@@ -300,11 +300,12 @@ export const declarationApi = createApi({
     // Notify compliance department
     notifyCompliance: builder.mutation<
       { data: any; message: string; success: boolean },
-      { declarationId: string }
+      { declarationId: string; subject?: string; body?: string }
     >({
-      query: ({ declarationId }) => ({
+      query: ({ declarationId, subject, body }) => ({
         url: `Declarations/notify-compliance/${declarationId}`,
         method: 'POST',
+        body: subject || body ? { subject, body } : undefined,
       }),
       invalidatesTags: (_result, _error, { declarationId }) => [
         { type: 'Declarations', id: declarationId },

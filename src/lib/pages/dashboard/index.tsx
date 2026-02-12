@@ -20,6 +20,7 @@ import { useGetCounterpartiesQuery, useCheckConflictMutation, useNotifyComplianc
 import type { ICounterparty, IConflictCheckResponse } from '@/lib/interfaces/counterparty.interfaces';
 import { useGetCurrentUserQuery } from '@/lib/redux/services/auth.service';
 import { hasAdminAccess } from '@/lib/constants/roles';
+import { wrapInEmailTemplate } from '@/lib/utils/emailTemplate';
 
 const Dashboard = () => {
   const router = useRouter();
@@ -77,8 +78,16 @@ const Dashboard = () => {
 
     if (declarationId) {
       try {
+        const counterpartyName = conflictCheckResult?.counterparty?.name || 'Unknown';
+        const checkedBy = conflictCheckResult?.checkedByFullName || 'an employee';
         await notifyCompliance({
           declarationId: declarationId,
+          subject: 'Conflict of Interest Notification',
+          body: wrapInEmailTemplate({
+            title: 'Conflict of Interest Notification',
+            subtitle: counterpartyName,
+            bodyContent: `<p>A conflict of interest has been identified and requires your attention.</p><p><strong>Counterparty:</strong> ${counterpartyName}</p><p><strong>Checked by:</strong> ${checkedBy}</p><p><strong>Date/Time:</strong> ${new Date().toLocaleString()}</p><p>Please review this matter at your earliest convenience through the InfraCredit Conflict Declaration portal.</p>`,
+          }),
         }).unwrap();
         setNotificationSent(true);
       } catch (error) {

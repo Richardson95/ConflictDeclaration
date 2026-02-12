@@ -231,11 +231,12 @@ export const counterpartyApi = createApi({
     // Notify compliance department for a conflict check
     notifyComplianceForConflictCheck: builder.mutation<
       { data: any; message: string; success: boolean },
-      { declarationId: string }
+      { declarationId: string; subject?: string; body?: string }
     >({
-      query: ({ declarationId }) => ({
+      query: ({ declarationId, subject, body }) => ({
         url: `Declarations/notify-compliance/${declarationId}`,
         method: 'POST',
+        body: subject || body ? { subject, body } : undefined,
       }),
       invalidatesTags: ['ConflictChecks'],
     }),
