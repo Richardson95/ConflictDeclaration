@@ -61,6 +61,8 @@ export const counterpartyApi = createApi({
         if (filters?.hasConflict !== undefined)
           params.append('hasConflict', filters.hasConflict.toString());
         if (filters?.searchTerm) params.append('search', filters.searchTerm);
+        if (filters?.restrictionStatus !== undefined)
+          params.append('RestrictionStatus', filters.restrictionStatus.toString());
 
         return `Counterparties?${params.toString()}`;
       },
@@ -240,6 +242,39 @@ export const counterpartyApi = createApi({
       }),
       invalidatesTags: ['ConflictChecks'],
     }),
+
+    // Toggle restriction status for a counterparty
+    toggleRestrictionCounterparty: builder.mutation<
+      { data: any; message: string; success: boolean },
+      string
+    >({
+      query: (id) => ({
+        url: `Counterparties/${id}/toggle-restriction`,
+        method: 'PATCH',
+      }),
+      invalidatesTags: ['Counterparties'],
+    }),
+
+    // Get notification stats for a restricted counterparty
+    getCounterpartyNotificationStats: builder.query<
+      { data: any; message: string; success: boolean },
+      string
+    >({
+      query: (id) => `Counterparties/${id}/notification-stats`,
+      providesTags: (_result, _error, id) => [{ type: 'Counterparties', id }],
+    }),
+
+    // Notify compliance about investment/divestment interest in a restricted counterparty
+    notifyRestrictedInvestment: builder.mutation<
+      { data: any; message: string; success: boolean },
+      { counterpartyId: string; message: string }
+    >({
+      query: (body) => ({
+        url: 'Counterparties/notify-restricted-investment',
+        method: 'POST',
+        body,
+      }),
+    }),
   }),
 });
 
@@ -256,4 +291,7 @@ export const {
   useGetCounterpartySectorsQuery,
   useGetCounterpartyStatsQuery,
   useNotifyComplianceForConflictCheckMutation,
+  useToggleRestrictionCounterpartyMutation,
+  useGetCounterpartyNotificationStatsQuery,
+  useNotifyRestrictedInvestmentMutation,
 } = counterpartyApi;

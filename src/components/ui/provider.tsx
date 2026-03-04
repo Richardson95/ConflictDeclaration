@@ -47,9 +47,9 @@ export function Provider(props: React.PropsWithChildren) {
   // Show loading while MSAL initializes
   if (!isInitialized || !instance) {
     return (
-      <ChakraProvider value={customTheme}>
-        <ReduxProvider store={store}>
-          <ColorModeProvider>
+      <ColorModeProvider>
+        <ChakraProvider value={customTheme}>
+          <ReduxProvider store={store}>
             <div style={{
               display: 'flex',
               justifyContent: 'center',
@@ -60,23 +60,23 @@ export function Provider(props: React.PropsWithChildren) {
             }}>
               Initializing...
             </div>
-          </ColorModeProvider>
-        </ReduxProvider>
-      </ChakraProvider>
+          </ReduxProvider>
+        </ChakraProvider>
+      </ColorModeProvider>
     );
   }
 
   return (
-    <ChakraProvider value={customTheme}>
-      <ReduxProvider store={store}>
-        <ColorModeProvider>
+    <ColorModeProvider>
+      <ChakraProvider value={customTheme}>
+        <ReduxProvider store={store}>
           <MsalProvider instance={instance}>
             <AuthInitializer>
               {props.children}
             </AuthInitializer>
           </MsalProvider>
-        </ColorModeProvider>
-      </ReduxProvider>
-    </ChakraProvider>
+        </ReduxProvider>
+      </ChakraProvider>
+    </ColorModeProvider>
   );
 }

@@ -12,11 +12,12 @@ import {
   Text,
 } from '@chakra-ui/react';
 import { Button } from '@/components/ui';
+import { toaster } from '@/components/ui/toaster';
 import { LuHistory, LuDownload } from 'react-icons/lu';
 import { FiSettings } from 'react-icons/fi';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useGetCounterpartiesQuery, useCheckConflictMutation, useNotifyComplianceForConflictCheckMutation } from '@/lib/redux/services/counterparty.service';
+import { useGetCounterpartiesQuery, useCheckConflictMutation, useNotifyComplianceForConflictCheckMutation, useNotifyRestrictedInvestmentMutation } from '@/lib/redux/services/counterparty.service';
 import type { ICounterparty, IConflictCheckResponse } from '@/lib/interfaces/counterparty.interfaces';
 import { useGetCurrentUserQuery } from '@/lib/redux/services/auth.service';
 import { hasAdminAccess } from '@/lib/constants/roles';
@@ -33,24 +34,49 @@ const Dashboard = () => {
   const [notificationSent, setNotificationSent] = useState(false);
   const [conflictCheckResult, setConflictCheckResult] = useState<IConflictCheckResponse | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [restrictionFilter, setRestrictionFilter] = useState<'all' | 'restricted' | 'unrestricted'>('all');
+  const [investDivestSent, setInvestDivestSent] = useState<Set<string>>(new Set());
 
   // Fetch current user data to check role
   const { data: currentUserData } = useGetCurrentUserQuery();
   const currentUser = currentUserData?.data;
   const isAdmin = hasAdminAccess(currentUser?.role);
 
+  // Build filters for counterparties query
+  const counterpartyFilters = useMemo(() => {
+    const filters: any = {};
+    if (searchQuery) filters.searchTerm = searchQuery;
+    if (restrictionFilter === 'restricted') filters.restrictionStatus = 1;
+    if (restrictionFilter === 'unrestricted') filters.restrictionStatus = 0;
+    return Object.keys(filters).length > 0 ? filters : undefined;
+  }, [searchQuery, restrictionFilter]);
+
   // Fetch counterparties from API
   const { data, isLoading, error } = useGetCounterpartiesQuery({
     page: currentPage,
     limit: itemsPerPage,
-    filters: searchQuery ? { searchTerm: searchQuery } : undefined,
+    filters: counterpartyFilters,
   });
+
+  // Always fetch all restricted IDs so we can mark them in "All" view
+  const { data: restrictedData } = useGetCounterpartiesQuery({
+    page: 1,
+    limit: 10000,
+    filters: { restrictionStatus: 1 },
+  });
+  const restrictedIds = useMemo(
+    () => new Set((restrictedData?.data || []).map((c) => c.id)),
+    [restrictedData]
+  );
 
   // Check conflict mutation
   const [checkConflict, { isLoading: isCheckingConflict }] = useCheckConflictMutation();
 
   // Notify compliance mutation
   const [notifyCompliance, { isLoading: isNotifyingCompliance }] = useNotifyComplianceForConflictCheckMutation();
+
+  // Notify compliance about invest/divest interest in a restricted counterparty
+  const [notifyRestrictedInvestment] = useNotifyRestrictedInvestmentMutation();
 
   const handleCheckConflict = useCallback(async () => {
     if (selectedCounterparty) {
@@ -103,6 +129,19 @@ const Dashboard = () => {
   const handleAdminPanel = useCallback(() => {
     router.push('/admin');
   }, [router]);
+
+  const handleInvestDivest = useCallback(async (item: ICounterparty) => {
+    try {
+      const userName = currentUser ? `${(currentUser as any).firstName} ${(currentUser as any).lastName}` : 'An employee';
+      const userDept = (currentUser as any)?.department?.name || (currentUser as any)?.departmentName || '';
+      const message = `${userName}${userDept ? ` (${userDept})` : ''} has signalled an investment/divestment interest regarding the restricted counterparty "${item.name}" on ${new Date().toLocaleString()}.`;
+      await notifyRestrictedInvestment({ counterpartyId: item.id, message }).unwrap();
+      setInvestDivestSent((prev) => new Set(prev).add(item.id));
+      toaster.success({ title: 'Notification sent to compliance team' });
+    } catch {
+      toaster.error({ title: 'Error', description: 'Failed to send notification. Please try again.' });
+    }
+  }, [currentUser, notifyRestrictedInvestment]);
 
   const handleDownloadReport = useCallback(async () => {
     if (!conflictCheckResult) {
@@ -271,6 +310,14 @@ const Dashboard = () => {
 
     return pages;
   }, [currentPage, totalPages]);
+
+  // Resolve isRestricted: use API field, then restrictedIds set, then filter context
+  const resolveIsRestricted = (item: ICounterparty) => {
+    if (item.isRestricted === true) return true;
+    if (restrictedIds.has(item.id)) return true;
+    if (restrictionFilter === 'restricted') return true;
+    return false;
+  };
 
   return (
     <DashboardLayout>
@@ -446,12 +493,12 @@ const Dashboard = () => {
           </Box>
         </VStack>
 
-        {/* Search */}
-        <Box mb={4}>
+        {/* Search + Restriction Filter */}
+        <HStack mb={4} gap={3} flexWrap="wrap">
           <Input
             placeholder="Search counterparty"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
             maxW={{ base: "100%", md: "300px", lg: "250px" }}
             h={{ base: "38px", md: "40px" }}
             borderRadius="8px"
@@ -460,7 +507,26 @@ const Dashboard = () => {
             fontSize={{ base: "13px", md: "14px", lg: "15px" }}
             _focus={{ borderColor: '#2E7BB4', boxShadow: '0 0 0 1px #2E7BB4' }}
           />
-        </Box>
+          <select
+            value={restrictionFilter}
+            onChange={(e) => { setRestrictionFilter(e.target.value as 'all' | 'restricted' | 'unrestricted'); setCurrentPage(1); }}
+            style={{
+              height: '40px',
+              borderRadius: '8px',
+              border: '1px solid #D0D7DE',
+              padding: '0 12px',
+              fontSize: '14px',
+              color: '#333',
+              backgroundColor: 'white',
+              cursor: 'pointer',
+              outline: 'none',
+            }}
+          >
+            <option value="all">All</option>
+            <option value="restricted">Restricted</option>
+            <option value="unrestricted">Unrestricted</option>
+          </select>
+        </HStack>
 
         {/* Desktop Table View */}
         <Box display={{ base: "none", lg: "block" }}>
@@ -525,9 +591,16 @@ const Dashboard = () => {
                     </Text>
                   </Box>
                   <Box w="350px" pl={28}>
-                    <Text fontSize="14px" color="#333" whiteSpace="nowrap">
-                      {item.name}
-                    </Text>
+                    <HStack gap={2} align="center">
+                      <Text fontSize="14px" color="#333" whiteSpace="nowrap">
+                        {item.name}
+                      </Text>
+                      {resolveIsRestricted(item) && (
+                        <Text fontSize="12px" color="red.500" fontWeight="600" whiteSpace="nowrap">
+                          (Restricted)
+                        </Text>
+                      )}
+                    </HStack>
                   </Box>
                   <Box flex="1" pl={56}>
                     <Text fontSize="14px" color="#333">
@@ -535,24 +608,42 @@ const Dashboard = () => {
                     </Text>
                   </Box>
                   <Box w="200px" textAlign="right">
-                    <ChakraButton
-                      bg="#227CBF"
-                      color="white"
-                      fontSize="13px"
-                      fontWeight="500"
-                      px={5}
-                      h="36px"
-                      borderRadius="6px"
-                      _hover={{ bg: '#1B6AA3' }}
-                      onClick={() => {
-                        setSelectedCounterparty(item);
-                        setConflictCheckResult(null);
-                        setNotificationSent(false);
-                        setIsDisclaimerOpen(true);
-                      }}
-                    >
-                      Check Conflict
-                    </ChakraButton>
+                    <HStack gap={2} justify="flex-end">
+                      {resolveIsRestricted(item) && (
+                        <ChakraButton
+                          bg={investDivestSent.has(item.id) ? '#888' : '#47B65C'}
+                          color="white"
+                          fontSize="13px"
+                          fontWeight="500"
+                          px={4}
+                          h="36px"
+                          borderRadius="6px"
+                          _hover={{ bg: investDivestSent.has(item.id) ? '#888' : '#3DA550' }}
+                          disabled={investDivestSent.has(item.id)}
+                          onClick={() => handleInvestDivest(item)}
+                        >
+                          {investDivestSent.has(item.id) ? 'Sent' : 'Invest/Divest'}
+                        </ChakraButton>
+                      )}
+                      <ChakraButton
+                        bg="#227CBF"
+                        color="white"
+                        fontSize="13px"
+                        fontWeight="500"
+                        px={5}
+                        h="36px"
+                        borderRadius="6px"
+                        _hover={{ bg: '#1B6AA3' }}
+                        onClick={() => {
+                          setSelectedCounterparty(item);
+                          setConflictCheckResult(null);
+                          setNotificationSent(false);
+                          setIsDisclaimerOpen(true);
+                        }}
+                      >
+                        Check Conflict
+                      </ChakraButton>
+                    </HStack>
                   </Box>
                 </HStack>
               </Box>
@@ -600,7 +691,12 @@ const Dashboard = () => {
                 <VStack align="stretch" gap={5}>
                   <Box>
                     <Text fontSize={{ base: "14px", md: "11px" }} color="#333" mb={2}>Counterparty</Text>
-                    <Text fontSize={{ base: "18px", md: "15px" }} color="#333" fontWeight="600">{item.name}</Text>
+                    <HStack gap={2} align="center">
+                      <Text fontSize={{ base: "18px", md: "15px" }} color="#333" fontWeight="600">{item.name}</Text>
+                      {resolveIsRestricted(item) && (
+                        <Text fontSize="12px" color="red.500" fontWeight="600">(Restricted)</Text>
+                      )}
+                    </HStack>
                   </Box>
 
                   <Box>
@@ -609,25 +705,43 @@ const Dashboard = () => {
                   </Box>
                 </VStack>
 
-                <ChakraButton
-                  bg="#227CBF"
-                  color="white"
-                  fontSize={{ base: "17px", md: "14px" }}
-                  fontWeight="500"
-                  w="100%"
-                  h={{ base: "52px", md: "42px" }}
-                  borderRadius="12px"
-                  _hover={{ bg: '#1B6AA3' }}
-                  _active={{ bg: '#165A8C' }}
-                  onClick={() => {
-                    setSelectedCounterparty(item);
-                    setConflictCheckResult(null);
-                    setNotificationSent(false);
-                    setIsDisclaimerOpen(true);
-                  }}
-                >
-                  Check Conflict
-                </ChakraButton>
+                <VStack gap={2} align="stretch">
+                  {resolveIsRestricted(item) && (
+                    <ChakraButton
+                      bg={investDivestSent.has(item.id) ? '#888' : '#47B65C'}
+                      color="white"
+                      fontSize={{ base: "17px", md: "14px" }}
+                      fontWeight="500"
+                      w="100%"
+                      h={{ base: "52px", md: "42px" }}
+                      borderRadius="12px"
+                      _hover={{ bg: investDivestSent.has(item.id) ? '#888' : '#3DA550' }}
+                      disabled={investDivestSent.has(item.id)}
+                      onClick={() => handleInvestDivest(item)}
+                    >
+                      {investDivestSent.has(item.id) ? 'Sent' : 'Invest/Divest'}
+                    </ChakraButton>
+                  )}
+                  <ChakraButton
+                    bg="#227CBF"
+                    color="white"
+                    fontSize={{ base: "17px", md: "14px" }}
+                    fontWeight="500"
+                    w="100%"
+                    h={{ base: "52px", md: "42px" }}
+                    borderRadius="12px"
+                    _hover={{ bg: '#1B6AA3' }}
+                    _active={{ bg: '#165A8C' }}
+                    onClick={() => {
+                      setSelectedCounterparty(item);
+                      setConflictCheckResult(null);
+                      setNotificationSent(false);
+                      setIsDisclaimerOpen(true);
+                    }}
+                  >
+                    Check Conflict
+                  </ChakraButton>
+                </VStack>
               </VStack>
             </Box>
           ))}

@@ -5,6 +5,7 @@ export interface ICounterparty {
   sectorName: string;
   conflictCount: number;
   isActive: boolean;
+  isRestricted: boolean;
   createdAt: string;
 }
 
@@ -13,6 +14,7 @@ export interface ICounterpartyFilters {
   hasConflict?: boolean;
   searchTerm?: string;
   year?: number;
+  restrictionStatus?: 0 | 1;
 }
 
 export interface IConflictCheckRequest {

@@ -38,14 +38,13 @@ import {
 } from '@/lib/redux/services/department.service';
 
 import {
+  useGetCounterpartiesQuery,
   useCreateCounterpartyMutation,
   useUpdateCounterpartyMutation,
   useDeleteCounterpartyMutation,
+  useToggleRestrictionCounterpartyMutation,
 } from '@/lib/redux/services/counterparty.service';
 
-import {
-  useGetCounterpartyConflictSummaryQuery,
-} from '@/lib/redux/services/dashboard.service';
 
 import {
   useGetSectorsQuery,
@@ -157,11 +156,23 @@ const SettingsPage = () => {
     limit: 1000,
   });
 
-  // Fetch ALL counterparties for client-side filtering
-  const { data: counterpartiesData, isLoading: isLoadingCounterparties, refetch: refetchCounterparties } = useGetCounterpartyConflictSummaryQuery({
+  // Fetch ALL counterparties for client-side filtering (includes isRestricted)
+  const { data: counterpartiesData, isLoading: isLoadingCounterparties } = useGetCounterpartiesQuery({
     page: 1,
-    limit: 10000, // Fetch all counterparties
+    limit: 10000,
   });
+
+  // Fetch restricted IDs separately — GET /Counterparties doesn't return isRestricted in response body
+  const { data: restrictedCounterpartiesData } = useGetCounterpartiesQuery({
+    page: 1,
+    limit: 10000,
+    filters: { restrictionStatus: 1 },
+  });
+  const restrictedIds = useMemo(
+    () => new Set((restrictedCounterpartiesData?.data || []).map((c: any) => c.id)),
+    [restrictedCounterpartiesData]
+  );
+
 
   const { data: sectorsData, isLoading: isLoadingSectors } = useGetSectorsQuery({
     page: activeTab === 'Categories' ? currentPage : 1,
@@ -195,6 +206,9 @@ const SettingsPage = () => {
   const [createCounterparty, { isLoading: isCreatingCounterparty }] = useCreateCounterpartyMutation();
   const [updateCounterparty, { isLoading: isUpdatingCounterparty }] = useUpdateCounterpartyMutation();
   const [deleteCounterparty, { isLoading: isDeletingCounterparty }] = useDeleteCounterpartyMutation();
+  const [toggleRestriction] = useToggleRestrictionCounterpartyMutation();
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [restrictedOverrides, setRestrictedOverrides] = useState<Record<string, boolean>>({});
 
   const [createSector, { isLoading: isCreatingSector }] = useCreateSectorMutation();
   const [updateSector, { isLoading: isUpdatingSector }] = useUpdateSectorMutation();
@@ -304,14 +318,15 @@ const SettingsPage = () => {
         };
       case 'Counterparties':
         return {
-          data: counterpartiesData?.data?.result?.map((item: any) => ({
+          data: (counterpartiesData?.data || []).map((item: any) => ({
             id: item.id,
-            name: item.counterparty,
-            sectorName: item.sector,
-            conflictCount: item.numberOfConflictsDeclared,
-          })) || [],
-          totalRecords: counterpartiesData?.data?.totalRecords || 0,
-          totalPages: counterpartiesData?.data?.totalPages || 1,
+            name: item.name,
+            sectorName: item.sectorName,
+            conflictCount: item.conflictCount ?? 0,
+            isRestricted: item.isRestricted ?? false,
+          })),
+          totalRecords: counterpartiesData?.total || 0,
+          totalPages: Math.ceil((counterpartiesData?.total || 0) / 10000) || 1,
           isLoading: isLoadingCounterparties,
         };
       case 'Categories':
@@ -593,8 +608,6 @@ const SettingsPage = () => {
         toaster.success({ title: 'Counterparty deleted successfully' });
         setShowDeleteCounterpartyModal(false);
         setCounterpartyToDelete(null);
-        // Refetch counterparties to remove the deleted one immediately
-        refetchCounterparties();
       } catch (error: any) {
         toaster.error({ title: 'Error', description: error?.data?.message || 'Failed to delete counterparty' });
       }
@@ -612,8 +625,6 @@ const SettingsPage = () => {
       toaster.success({ title: 'Counterparty created successfully' });
       setShowAddCounterpartyModal(false);
       setNewCounterparty({ name: '', sectorId: '' });
-      // Refetch counterparties to show the new one immediately
-      refetchCounterparties();
     } catch (error: any) {
       toaster.error({ title: 'Error', description: error?.data?.message || 'Failed to create counterparty' });
     }
@@ -631,8 +642,6 @@ const SettingsPage = () => {
       setShowEditCounterpartyModal(false);
       setCounterpartyToEdit(null);
       setNewCounterparty({ name: '', sectorId: '' });
-      // Refetch counterparties to show the updated one immediately
-      refetchCounterparties();
     } catch (error: any) {
       toaster.error({ title: 'Error', description: error?.data?.message || 'Failed to update counterparty' });
     }
@@ -790,9 +799,15 @@ const SettingsPage = () => {
 
   const sectorOptions = useMemo(() => {
     if (!activeSectorsData?.data?.result) return [{ label: 'All Categories', value: '' }];
+    const seen = new Set<string>();
+    const unique = activeSectorsData.data.result.filter((sector: any) => {
+      if (seen.has(sector.name)) return false;
+      seen.add(sector.name);
+      return true;
+    });
     return [
       { label: 'All Categories', value: '' },
-      ...activeSectorsData.data.result.map((sector: any) => ({
+      ...unique.map((sector: any) => ({
         label: sector.name,
         value: sector.name,
       }))
@@ -966,8 +981,8 @@ const SettingsPage = () => {
                       maxHeight="250px"
                       overflowY="auto"
                     >
-                      {sectorOptions.map((option: any) => (
-                        <ChakraSelect.Item key={option.value} item={option}>
+                      {sectorOptions.map((option: any, idx: number) => (
+                        <ChakraSelect.Item key={`${option.value}-${idx}`} item={option}>
                           {option.label}
                         </ChakraSelect.Item>
                       ))}
@@ -1173,7 +1188,7 @@ const SettingsPage = () => {
                             Conflicts
                           </Text>
                         </Box>
-                        <Box w="180px" textAlign="center">
+                        <Box w="260px" textAlign="center">
                           <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
                             Actions
                           </Text>
@@ -1373,7 +1388,7 @@ const SettingsPage = () => {
                                 {item.conflictCount || 0}
                               </Text>
                             </Box>
-                            <Box w="180px" textAlign="center">
+                            <Box w="260px" textAlign="center">
                               <HStack justify="center" gap={2}>
                                 <ChakraButton
                                   size="sm"
@@ -1400,6 +1415,35 @@ const SettingsPage = () => {
                                   onClick={() => handleDeleteCounterparty(item.id)}
                                 >
                                   Delete
+                                </ChakraButton>
+                                <ChakraButton
+                                  size="sm"
+                                  bg={(item.id in restrictedOverrides ? restrictedOverrides[item.id] : restrictedIds.has(item.id)) ? '#47B65C' : '#EF5350'}
+                                  color="white"
+                                  fontSize="12px"
+                                  px={4}
+                                  h="32px"
+                                  borderRadius="6px"
+                                  _hover={{ bg: (item.id in restrictedOverrides ? restrictedOverrides[item.id] : restrictedIds.has(item.id)) ? '#3DA550' : '#E53935' }}
+                                  loading={togglingId === item.id}
+                                  onClick={async () => {
+                                    const currentIsRestricted = item.id in restrictedOverrides ? restrictedOverrides[item.id] : restrictedIds.has(item.id);
+                                    try {
+                                      setTogglingId(item.id);
+                                      await toggleRestriction(item.id).unwrap();
+                                      const newIsRestricted = !currentIsRestricted;
+                                      setRestrictedOverrides(prev => ({ ...prev, [item.id]: newIsRestricted }));
+                                      toaster.success({
+                                        title: newIsRestricted ? 'Counterparty restricted' : 'Counterparty unrestricted',
+                                      });
+                                    } catch (error: any) {
+                                      toaster.error({ title: 'Error', description: error?.data?.message || 'Failed to update restriction status' });
+                                    } finally {
+                                      setTogglingId(null);
+                                    }
+                                  }}
+                                >
+                                  {(item.id in restrictedOverrides ? restrictedOverrides[item.id] : restrictedIds.has(item.id)) ? 'Unrestrict' : 'Restrict'}
                                 </ChakraButton>
                               </HStack>
                             </Box>
