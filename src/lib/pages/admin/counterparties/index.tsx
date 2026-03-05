@@ -21,7 +21,7 @@ import { Button } from '@/components/ui';
 import AdminLayout from '@/lib/layout/AdminLayout';
 import { FiChevronDown } from 'react-icons/fi';
 import { LuDownload } from 'react-icons/lu';
-import { useGetCounterpartiesQuery, useCreateCounterpartyMutation, useUpdateCounterpartyMutation, useDeleteCounterpartyMutation } from '@/lib/redux/services/counterparty.service';
+import { useGetCounterpartiesQuery, useCreateCounterpartyMutation, useUpdateCounterpartyMutation, useDeleteCounterpartyMutation, useGetCounterpartyNotificationStatsQuery } from '@/lib/redux/services/counterparty.service';
 import { useGetCounterpartyConflictSummaryQuery, useDownloadCounterpartyConflictSummaryMutation, useSendBroadcastEmailMutation } from '@/lib/redux/services/dashboard.service';
 import { useGetActiveSectorsQuery } from '@/lib/redux/services/sector.service';
 import { useGetDeclarationsQuery } from '@/lib/redux/services/declaration.service';
@@ -30,6 +30,22 @@ import { canViewConflictDetails, isITAdmin, isLeadership, UserRole } from '@/lib
 import { toaster } from '@/components/ui/toaster';
 import { useRouter } from 'next/navigation';
 import { wrapInEmailTemplate } from '@/lib/utils/emailTemplate';
+
+const NotificationCount = ({ counterpartyId }: { counterpartyId: string }) => {
+  const { data, isLoading } = useGetCounterpartyNotificationStatsQuery(counterpartyId);
+  if (isLoading) return <Text fontSize="13px" color="#999">…</Text>;
+  const count =
+    data?.data?.totalNotifications ??
+    data?.data?.totalCount ??
+    data?.data?.count ??
+    (Array.isArray(data?.data) ? data.data.length : null) ??
+    0;
+  return (
+    <Text fontSize="13px" fontWeight={count > 0 ? '600' : '400'} color={count > 0 ? '#2E7BB4' : '#999'}>
+      {count > 0 ? count : '-'}
+    </Text>
+  );
+};
 
 const CounterpartiesPage = () => {
   const router = useRouter();
@@ -494,6 +510,11 @@ const CounterpartiesPage = () => {
                     Category
                   </Text>
                 </Box>
+                <Box w="140px" textAlign="center">
+                  <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
+                    Invest/Divest
+                  </Text>
+                </Box>
                 <Box w="200px" textAlign="center">
                   <Text fontSize="13px" fontWeight="600" color="#2E7BB4">
                     Action
@@ -552,6 +573,9 @@ const CounterpartiesPage = () => {
                           <Text fontSize="13px" color="#333">
                             {sector}
                           </Text>
+                        </Box>
+                        <Box w="140px" textAlign="center">
+                          <NotificationCount counterpartyId={item.id} />
                         </Box>
                         <Box w="200px" textAlign="center">
                           {userCanViewDetails ? (
@@ -661,6 +685,12 @@ const CounterpartiesPage = () => {
                           <Text fontSize="13px" color="#333">
                             {sector}
                           </Text>
+                        </HStack>
+                        <HStack justify="space-between">
+                          <Text fontSize="12px" fontWeight="600" color="#666">
+                            Invest/Divest:
+                          </Text>
+                          <NotificationCount counterpartyId={item.id} />
                         </HStack>
                         {userCanViewDetails && (
                           <ChakraButton
