@@ -34,12 +34,25 @@ import { wrapInEmailTemplate } from '@/lib/utils/emailTemplate';
 const NotificationCount = ({ counterpartyId }: { counterpartyId: string }) => {
   const { data, isLoading } = useGetCounterpartyNotificationStatsQuery(counterpartyId);
   if (isLoading) return <Text fontSize="13px" color="#999">…</Text>;
-  const count =
-    data?.data?.totalNotifications ??
-    data?.data?.totalCount ??
-    data?.data?.count ??
-    (Array.isArray(data?.data) ? data.data.length : null) ??
+
+  // Log raw response so we can see the actual shape in the browser console
+  if (data !== undefined) {
+    console.log('[notification-stats]', counterpartyId, data);
+  }
+
+  const raw = data?.data;
+  const count: number =
+    typeof raw === 'number' ? raw :
+    raw?.totalNotifications ??
+    raw?.totalCount ??
+    raw?.notificationCount ??
+    raw?.count ??
+    raw?.total ??
+    raw?.investDivestCount ??
+    (Array.isArray(raw?.notifications) ? (raw.notifications as any[]).length : null) ??
+    (Array.isArray(raw) ? (raw as any[]).length : null) ??
     0;
+
   return (
     <Text fontSize="13px" fontWeight={count > 0 ? '600' : '400'} color={count > 0 ? '#2E7BB4' : '#999'}>
       {count > 0 ? count : '-'}
