@@ -210,10 +210,17 @@ const CounterpartiesPage = () => {
   // Filter options
   const sectorOptions = useMemo(() => {
     if (!sectorsData?.data?.result) return [];
-    return sectorsData.data.result.map((sector: any) => ({
-      label: sector.name,
-      value: sector.name,
-    }));
+    const seen = new Set<string>();
+    return sectorsData.data.result
+      .filter((sector: any) => {
+        if (seen.has(sector.name)) return false;
+        seen.add(sector.name);
+        return true;
+      })
+      .map((sector: any) => ({
+        label: sector.name,
+        value: sector.name,
+      }));
   }, [sectorsData]);
 
   // Sector options for create/edit modal (uses sector id as value)
@@ -416,8 +423,8 @@ const CounterpartiesPage = () => {
                   zIndex={1500}
                   position="absolute"
                 >
-                  {sectorOptions.map((option) => (
-                    <ChakraSelect.Item key={option.value} item={option}>
+                  {sectorOptions.map((option, idx) => (
+                    <ChakraSelect.Item key={`${option.value}-${idx}`} item={option}>
                       {option.label}
                     </ChakraSelect.Item>
                   ))}
